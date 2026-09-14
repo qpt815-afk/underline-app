@@ -16,6 +16,7 @@
     "generate-icons": "node scripts/generate-icons.mjs"
   },
   "dependencies": {
+    "@supabase/supabase-js": "^2.116.0",
     "react": "19.3.0",
     "react-dom": "19.3.0",
     "react-router": "8.3.1"
