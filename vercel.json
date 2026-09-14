@@ -2,14 +2,12 @@
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "rewrites": [
     {
-      "comment": "SPA 폴백. /(.*) 로 잡으면 /api/* 까지 index.html 로 삼켜서 서버리스 함수가 HTML 을 돌려준다. 부정 전방탐색으로 api 를 제외한다.",
       "source": "/((?!api(?:/|$)).*)",
       "destination": "/index.html"
     }
   ],
   "headers": [
     {
-      "comment": "캐시된 서비스워커는 PWA 가 업데이트를 거부하는 전형적 원인이고, 폰에서는 복구가 매우 어렵다.",
       "source": "/sw.js",
       "headers": [
         { "key": "Cache-Control", "value": "public, max-age=0, must-revalidate" },
