@@ -19,6 +19,7 @@
     "@anthropic-ai/sdk": "^0.125.0",
     "@google/genai": "^2.22.0",
     "@supabase/supabase-js": "^2.116.0",
+    "dexie": "^4.4.6",
     "react": "19.3.0",
     "react-dom": "19.3.0",
     "react-router": "8.3.1"

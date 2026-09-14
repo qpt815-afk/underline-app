@@ -4,12 +4,12 @@ import ErrorState from '../components/ErrorState.tsx'
 import Skeleton from '../components/Skeleton.tsx'
 import PageHeader from '../components/PageHeader.tsx'
 import StarRating from '../components/StarRating.tsx'
-import { listBooks } from '../lib/books.ts'
+import { booksWithCache } from '../lib/cachedQueries.ts'
 import { BOOK_STATUS_LABEL } from '../lib/types.ts'
 import { useAsync } from '../lib/useAsync.ts'
 
 export default function Library() {
-  const { state, reload } = useAsync(() => listBooks(), [])
+  const { state, reload } = useAsync(() => booksWithCache(), [])
 
   return (
     <div>

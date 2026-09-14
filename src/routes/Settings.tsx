@@ -1,12 +1,31 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import PageHeader from '../components/PageHeader.tsx'
 import { isStandalone, useInstallPrompt } from '../lib/pwa.ts'
+import { supabase } from '../lib/supabase.ts'
+import { clearCache, listPending } from '../lib/db.ts'
+import { useAuth } from '../auth/AuthProvider.tsx'
 
 type HealthState = { status: 'idle' | 'loading' } | { status: 'done'; text: string }
 
 export default function Settings() {
   const { canInstall, installed, promptInstall } = useInstallPrompt()
+  const { user } = useAuth()
   const [health, setHealth] = useState<HealthState>({ status: 'idle' })
+  const [pendingCount, setPendingCount] = useState<number | null>(null)
+
+  useEffect(() => {
+    void listPending().then(
+      (rows) => { setPendingCount(rows.length) },
+      () => { setPendingCount(null) }
+    )
+  }, [])
+
+  async function signOut() {
+    // scope 기본값이 'global' 이라 모든 기기의 세션을 끊는다. 이 기기만 로그아웃한다.
+    await supabase.auth.signOut({ scope: 'local' })
+    // 다른 계정으로 다시 로그인했을 때 이전 캐시가 보이면 안 된다.
+    await clearCache().catch(() => undefined)
+  }
 
   // 폰에는 개발자 도구가 없다. 서버리스 함수가 살아 있는지 확인할
   // 유일한 수단이므로 설정 화면에 버튼으로 박아 둔다.
@@ -79,9 +98,27 @@ export default function Settings() {
         </div>
       </section>
 
+      <section className="px-5 pt-6">
+        <h2 className="text-sm font-medium text-muted">계정</h2>
+        <div className="mt-2 divide-y divide-line overflow-hidden rounded-xl border border-line bg-surface">
+          <Row label="로그인" value={user?.email ?? '—'} />
+          {pendingCount !== null && pendingCount > 0 ? (
+            <Row label="저장 대기 중인 사진" value={`${String(pendingCount)}장`} />
+          ) : null}
+          <button
+            type="button"
+            onClick={() => { void signOut() }}
+            className="flex w-full items-center justify-between px-4 py-3 text-left"
+          >
+            <span className="text-sm">로그아웃</span>
+            <span className="text-sm font-medium text-accent">이 기기에서</span>
+          </button>
+        </div>
+      </section>
+
       <section className="px-5 py-6">
         <p className="ko-prose text-xs text-muted">
-          로그인, 데이터 내보내기, 알림 설정은 다음 단계에서 추가됩니다. 화면 밝기(다크 모드)는 폰의
+          데이터 내보내기와 알림 설정은 다음 단계에서 추가됩니다. 화면 밝기(다크 모드)는 폰의
           시스템 설정을 따릅니다.
         </p>
       </section>

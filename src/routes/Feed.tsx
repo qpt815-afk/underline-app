@@ -4,12 +4,12 @@ import ErrorState from '../components/ErrorState.tsx'
 import Skeleton from '../components/Skeleton.tsx'
 import SentenceCard from '../components/SentenceCard.tsx'
 import PageHeader from '../components/PageHeader.tsx'
-import { listHighlights } from '../lib/books.ts'
+import { highlightsWithCache } from '../lib/cachedQueries.ts'
 import { useAsync } from '../lib/useAsync.ts'
 
 export default function Feed() {
   const [query, setQuery] = useState('')
-  const { state, reload } = useAsync(() => listHighlights(200), [])
+  const { state, reload } = useAsync(() => highlightsWithCache(200), [])
 
   const filtered = useMemo(() => {
     if (state.status !== 'ready') return []

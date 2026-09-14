@@ -4,14 +4,14 @@ import EmptyState from '../components/EmptyState.tsx'
 import ErrorState from '../components/ErrorState.tsx'
 import Skeleton from '../components/Skeleton.tsx'
 import SentenceCard from '../components/SentenceCard.tsx'
-import { listHighlights } from '../lib/books.ts'
+import { highlightsWithCache } from '../lib/cachedQueries.ts'
 import { localDateKey, pickForDate } from '../lib/daily.ts'
 import { useAsync } from '../lib/useAsync.ts'
 
 export default function Home() {
   // "다른 문장 보기" 를 누른 횟수. 날짜 시드에 섞어서 같은 날에도 다른 결과를 낸다.
   const [nonce, setNonce] = useState(0)
-  const { state, reload } = useAsync(() => listHighlights(200), [])
+  const { state, reload } = useAsync(() => highlightsWithCache(200), [])
 
   const today = localDateKey()
   const pick = state.status === 'ready' ? pickForDate(state.data, today, nonce) : null

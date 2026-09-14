@@ -9,6 +9,7 @@ import { uploadPagePhoto } from '../lib/storage.ts'
 import { listBooks, createBook, createHighlights } from '../lib/books.ts'
 import type { BookWithCount, ExtractedParagraph } from '../lib/types.ts'
 import { useAuth } from '../auth/AuthProvider.tsx'
+import { queueCapture, requestPersistence } from '../lib/db.ts'
 
 type Stage =
   | { name: 'idle' }
@@ -84,6 +85,19 @@ export default function Capture() {
           () => null
         )
       : Promise.resolve(null)
+
+    // 오프라인이면 네트워크를 시도하는 대신 바로 대기열에 넣는다.
+    // 지하철에서 찍은 사진이 사라지면 되돌릴 방법이 없다.
+    if (!navigator.onLine) {
+      void requestPersistence()
+      await queueCapture(prepared.blob, prepared.base64)
+      setStage({
+        name: 'error',
+        message: '지금은 오프라인이라 저장해 뒀어요. 연결되면 설정 화면에서 이어서 처리할 수 있어요.',
+        canRetryOther: false,
+      })
+      return
+    }
 
     const [uploaded] = await Promise.allSettled([uploadPromise, runOcr(prepared.base64)])
     const imagePath = uploaded.status === 'fulfilled' ? uploaded.value : null
