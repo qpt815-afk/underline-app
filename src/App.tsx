@@ -8,6 +8,8 @@ import ReloadPrompt from './components/ReloadPrompt.tsx'
 import Home from './routes/Home.tsx'
 import Library from './routes/Library.tsx'
 import Feed from './routes/Feed.tsx'
+import Capture from './routes/Capture.tsx'
+import BookDetail from './routes/BookDetail.tsx'
 import Settings from './routes/Settings.tsx'
 import NotFound from './routes/NotFound.tsx'
 
@@ -41,6 +43,8 @@ function AppShell() {
           <Route path="/" element={<Home />} />
           <Route path="/library" element={<Library />} />
           <Route path="/feed" element={<Feed />} />
+          <Route path="/capture" element={<Capture />} />
+          <Route path="/book/:id" element={<BookDetail />} />
           <Route path="/settings" element={<Settings />} />
           <Route path="*" element={<NotFound />} />
         </Routes>
