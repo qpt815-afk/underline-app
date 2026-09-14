@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <!-- viewport-fit=cover 가 없으면 env(safe-area-inset-*) 가 0 을 반환한다.
+         interactive-widget=resizes-content 는 키보드가 올라올 때 뷰포트를 줄여
+         하단 버튼이 가려지지 않게 한다. -->
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content"
+    />
+    <!-- 매니페스트의 theme_color 는 스플래시·작업전환기 색을, 아래 meta 는 실행 중 상태바 색을
+         결정한다. 둘은 다른 메커니즘이라 양쪽 다 필요하다. meta 만 미디어 쿼리가 가능하다. -->
+    <meta name="theme-color" content="#FAF8F4" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#13110F" media="(prefers-color-scheme: dark)" />
+    <meta name="color-scheme" content="light dark" />
+    <meta name="description" content="책에서 만난 문장을 찍어 모아두는 앱" />
+    <link rel="icon" type="image/svg+xml" href="/icons/favicon.svg" />
+    <!-- iOS 는 매니페스트 아이콘 대신 이 태그를 쓴다 -->
+    <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-title" content="밑줄" />
+    <title>밑줄</title>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
