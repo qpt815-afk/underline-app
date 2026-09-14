@@ -8,8 +8,8 @@
   },
   "scripts": {
     "dev": "vite",
-    "build": "tsc --noEmit && vite build",
-    "typecheck": "tsc --noEmit",
+    "build": "tsc -b && vite build",
+    "typecheck": "tsc -b",
     "lint": "eslint .",
     "preview": "vite preview",
     "sync-font": "cp node_modules/@fontsource/noto-serif-kr/files/noto-serif-kr-korean-400-normal.woff2 public/fonts/noto-serif-kr-korean-400.woff2 && cp node_modules/@fontsource/noto-serif-kr/LICENSE public/fonts/LICENSE.txt",

@@ -16,6 +16,9 @@ export const TARGET_LONG_EDGE = 1600
  */
 export const JPEG_QUALITY = 0.85
 
+/** 결과가 상한을 넘으면 이 순서로 품질을 낮춰 다시 굽는다. */
+const QUALITY_LADDER = [JPEG_QUALITY, 0.72, 0.6] as const
+
 /** 원본이 이보다 크면 디코드 자체가 메모리를 터뜨릴 수 있어 먼저 거른다. */
 const MAX_SOURCE_BYTES = 40 * 1024 * 1024
 const MAX_SOURCE_PIXELS = 80_000_000
@@ -58,11 +61,25 @@ export interface EncodedPhoto {
   height: number
 }
 
+/**
+ * HEIC/HEIF 인지 본다.
+ *
+ * 정확 일치만으로는 image/heic-sequence 같은 변형과, 일부 안드로이드
+ * 콘텐츠 제공자가 주는 빈 MIME 을 놓친다. 그러면 '디코드 실패' 로만 보여서
+ * 카메라 설정 탓이라는 걸 알 수 없다. 파일 이름도 같이 본다.
+ */
+function isHeic(file: Blob): boolean {
+  if (/^image\/hei[cf]/i.test(file.type)) return true
+  const name = file instanceof File ? file.name : ''
+  return /\.(heic|heif)$/i.test(name)
+}
+
 export async function encodePhoto(file: Blob): Promise<EncodedPhoto> {
-  if (file.type === 'image/heic' || file.type === 'image/heif') {
+  if (isHeic(file)) {
     throw new PhotoError('heic-unsupported', PHOTO_ERROR_MESSAGE['heic-unsupported'])
   }
-  if (!file.type.startsWith('image/')) {
+  // MIME 이 비어 있는 경우가 있어 명시적으로 아닌 것만 거른다.
+  if (file.type !== '' && !file.type.startsWith('image/')) {
     throw new PhotoError('not-an-image', PHOTO_ERROR_MESSAGE['not-an-image'])
   }
   if (file.size === 0) {
@@ -123,9 +140,18 @@ export async function encodePhoto(file: Blob): Promise<EncodedPhoto> {
     // convertToBlob 은 옵션 객체를 받는다(canvas.toBlob 의 콜백 시그니처와 다르다).
     // type 을 빼면 기본값이 image/png 라 몇 MB 짜리가 나오고,
     // quality 를 0~1 밖의 값으로 주면 조용히 92 로 떨어진다.
-    const blob = await canvas.convertToBlob({ type: 'image/jpeg', quality: JPEG_QUALITY })
-
-    if (blob.type !== 'image/jpeg') {
+    //
+    // 상한을 넘으면 바로 포기하지 않고 품질을 낮춰 다시 굽는다. 사용자는 그냥
+    // 문장을 저장하고 싶을 뿐이므로, 조금 흐려지더라도 되는 편이 낫다.
+    let blob: Blob | null = null
+    for (const quality of QUALITY_LADDER) {
+      blob = await canvas.convertToBlob({ type: 'image/jpeg', quality })
+      if (blob.type !== 'image/jpeg') {
+        throw new PhotoError('encode-failed', PHOTO_ERROR_MESSAGE['encode-failed'])
+      }
+      if (blob.size <= MAX_OUTPUT_BYTES) break
+    }
+    if (!blob) {
       throw new PhotoError('encode-failed', PHOTO_ERROR_MESSAGE['encode-failed'])
     }
     if (blob.size > MAX_OUTPUT_BYTES) {
