@@ -1,0 +1,30 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      # tsc -b 여야 한다. tsc --noEmit 은 루트 tsconfig 의 references 를
+      # 무시하고 빈 프로그램을 검사해서 어떤 타입 오류도 잡지 못한다.
+      - name: 타입 검사
+        run: npm run typecheck
+
+      - name: 린트
+        run: npm run lint
+
+      - name: 빌드
+        run: npm run build

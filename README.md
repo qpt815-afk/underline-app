@@ -49,6 +49,32 @@
    - **Project URL**
    - **Publishable key** (`sb_publishable_...`)
 
+### 3.5단계 — 이메일 템플릿 고치기 ⚠️ 빠뜨리면 로그인이 안 됩니다
+
+기본 템플릿은 6자리 코드가 아니라 **링크**를 보냅니다. 앱은 코드를 입력받으므로
+템플릿 **두 개**를 모두 고쳐야 합니다.
+
+1. Supabase 대시보드 → **Authentication** → **Emails** (또는 Email Templates)
+2. **Confirm signup** 템플릿을 열고 본문을 아래로 바꿉니다:
+   ```
+   <p>밑줄 로그인 코드입니다.</p>
+   <p style="font-size:32px;letter-spacing:8px"><b>{{ .Token }}</b></p>
+   ```
+3. **Magic Link** (또는 Magic Link / OTP) 템플릿도 **똑같이** 바꿉니다
+
+> **왜 두 개인가**: 처음 로그인할 때는 계정이 없어서 *Confirm signup* 템플릿이,
+> 두 번째부터는 *Magic Link* 템플릿이 나갑니다. 하나만 고치면 첫 로그인 메일에
+> 코드가 없고, 무료 발송은 **시간당 2통**이라 그걸 확인하는 데만 한도를 태웁니다.
+
+### 3.6단계 — 커스텀 SMTP 설정 (강력 권장)
+
+Supabase 내장 메일은 **프로젝트 전체에서 시간당 2통**입니다. 로그인을 몇 번만
+시도해도 잠깁니다. [Resend](https://resend.com) 무료 플랜이면 충분합니다.
+
+1. Resend 가입 → **API Keys** → 키 생성
+2. Supabase → **Project Settings** → **Authentication** → **SMTP Settings**
+3. **Enable Custom SMTP** 켜고 Resend가 알려주는 호스트/포트/사용자/비밀번호 입력
+
 ### 4단계 — OCR API 키 발급 (Phase 1에 필요)
 
 무료로 쓰려면 **Gemini**, 최고 품질을 원하면 **Claude** 중 하나만 있으면 됩니다.
