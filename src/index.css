@@ -1,0 +1,92 @@
+@import 'tailwindcss';
+
+/* Fontsource 의 CSS 를 그대로 import 하지 않고 직접 선언하는 이유:
+   1) 그 CSS 는 2.3MB 짜리 woff 폴백까지 함께 배포시킨다. woff2 를 못 읽는
+      브라우저는 이 앱의 대상이 아니므로 순수한 낭비다.
+   2) font-display 는 서술자라 나중 규칙으로 덮어쓸 수 없는데, Fontsource 는
+      swap 을 하드코딩한다. 이 폰트는 서비스워커가 통째로 프리캐시하므로
+      optional 이 맞다 — 첫 방문 이후로는 깜빡임이 아예 없다. */
+@font-face {
+  font-family: 'Noto Serif KR';
+  font-style: normal;
+  font-weight: 400;
+  font-display: optional;
+  src: url('/fonts/noto-serif-kr-korean-400.woff2') format('woff2');
+}
+
+/* 팔레트는 CSS 변수로 두고 @theme inline 으로 Tailwind 에 노출한다.
+   이렇게 하면 다크모드 전환이 변수 교체 한 번으로 끝나고,
+   컴포넌트마다 dark: 변형을 달 필요가 없다. */
+:root {
+  --c-bg: #faf8f4;
+  --c-surface: #ffffff;
+  --c-ink: #1c1917;
+  --c-muted: #78716c;
+  --c-accent: #b4542e;
+  --c-line: #e7e1d8;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --c-bg: #13110f;
+    --c-surface: #1c1917;
+    --c-ink: #e9e4db;
+    --c-muted: #a8a29e;
+    --c-accent: #d98a5f;
+    --c-line: #2c2724;
+  }
+}
+
+@theme inline {
+  --color-bg: var(--c-bg);
+  --color-surface: var(--c-surface);
+  --color-ink: var(--c-ink);
+  --color-muted: var(--c-muted);
+  --color-accent: var(--c-accent);
+  --color-line: var(--c-line);
+
+  /* 문장 카드는 세리프, UI 는 시스템 산세리프.
+     갤럭시의 system-ui 는 One UI Sans KR 이라 별도 웹폰트를 받을 이유가 없다. */
+  --font-serif: 'Noto Serif KR', 'Apple SD Gothic Neo', serif;
+  --font-sans:
+    system-ui, -apple-system, 'Segoe UI', 'Malgun Gothic', 'Apple SD Gothic Neo', sans-serif;
+}
+
+html {
+  /* 안드로이드 크롬의 폰트 부스팅(자동 확대) 억제 */
+  -webkit-text-size-adjust: 100%;
+  background-color: var(--c-bg);
+}
+
+body {
+  margin: 0;
+  font-family: var(--font-sans);
+  background-color: var(--c-bg);
+  color: var(--c-ink);
+  /* 상하 여백은 bottom nav 쪽에서 safe-area 로 처리한다 */
+  overscroll-behavior-y: none;
+}
+
+/* 한국어 본문 줄바꿈. keep-all 은 어절 중간에서 끊기는 것을 막지만
+   URL 같은 긴 토큰의 오버플로는 막지 못하므로 항상 짝으로 쓴다. */
+.ko-prose {
+  word-break: keep-all;
+  overflow-wrap: break-word;
+  line-height: 1.85;
+  letter-spacing: -0.003em;
+}
+
+/* iOS 는 16px 미만 입력창에 포커스하면 자동 확대되고, 확대된 채로 남는다 */
+input,
+textarea,
+select,
+button {
+  font-size: max(16px, 1rem);
+  font-family: inherit;
+}
+
+/* 키보드 포커스는 남기되 마우스/터치 탭에서는 링을 띄우지 않는다 */
+:focus-visible {
+  outline: 2px solid var(--c-accent);
+  outline-offset: 2px;
+}
