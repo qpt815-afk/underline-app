@@ -1,0 +1,19 @@
+{
+  "comment": "서비스워커는 DOM 이 아니라 WebWorker 라이브러리를 쓴다. 한 tsconfig 에 DOM 과 WebWorker 를 같이 넣으면 중복 선언 오류가 난다.",
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": ["ES2022", "WebWorker"],
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "verbatimModuleSyntax": true,
+    "moduleDetection": "force",
+    "noEmit": true,
+    "skipLibCheck": true,
+    "strict": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "erasableSyntaxOnly": true,
+    "noUncheckedIndexedAccess": true
+  },
+  "include": ["src/sw.ts"]
+}
