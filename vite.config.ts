@@ -39,6 +39,18 @@ export default defineConfig({
         // index.html 의 light 용 theme-color 와 반드시 같아야 한다
         theme_color: '#FAF8F4',
         background_color: '#FAF8F4',
+        // 갤러리에서 "공유 → 밑줄" 로 사진을 바로 보낼 수 있게 한다.
+        // 서비스워커(src/sw.ts)가 이 POST 를 가로채 사진을 앱에 넘긴다.
+        // accept 에 MIME 과 확장자를 모두 적어야 한다 — 확장자만 있으면 공유 시트에는
+        // 뜨지만 formData() 에서 실패한다.
+        share_target: {
+          action: '/share-target',
+          method: 'POST',
+          enctype: 'multipart/form-data',
+          params: {
+            files: [{ name: 'photo', accept: ['image/jpeg', 'image/png', 'image/webp', '.jpg', '.jpeg', '.png', '.webp'] }],
+          },
+        },
         icons: [
           { src: '/icons/icon-192.png', sizes: '192x192', type: 'image/png', purpose: 'any' },
           { src: '/icons/icon-512.png', sizes: '512x512', type: 'image/png', purpose: 'any' },
