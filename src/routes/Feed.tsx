@@ -5,11 +5,24 @@ import Skeleton from '../components/Skeleton.tsx'
 import SentenceCard from '../components/SentenceCard.tsx'
 import PageHeader from '../components/PageHeader.tsx'
 import { highlightsWithCache } from '../lib/cachedQueries.ts'
+import { deleteHighlight } from '../lib/books.ts'
 import { useAsync } from '../lib/useAsync.ts'
 
 export default function Feed() {
   const [query, setQuery] = useState('')
   const { state, reload } = useAsync(() => highlightsWithCache(200), [])
+
+  async function remove(id: string, text: string) {
+    // 되돌릴 수 없으므로 한 번 묻는다. 문장 앞부분을 보여줘야 어느 것인지 안다.
+    const head = text.length > 30 ? `${text.slice(0, 30)}…` : text
+    if (!window.confirm(`이 문장을 지울까요?\n\n“${head}”`)) return
+    try {
+      await deleteHighlight(id)
+      reload()
+    } catch (error) {
+      window.alert(error instanceof Error ? error.message : '지우지 못했습니다.')
+    }
+  }
 
   const filtered = useMemo(() => {
     if (state.status !== 'ready') return []
@@ -58,6 +71,7 @@ export default function Feed() {
               bookTitle={highlight.book.title}
               author={highlight.book.author}
               page={highlight.page}
+              onDelete={() => { void remove(highlight.id, highlight.text) }}
             />
           </li>
         ))}
