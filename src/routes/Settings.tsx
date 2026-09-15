@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { Link } from 'react-router'
 import PageHeader from '../components/PageHeader.tsx'
 import { isStandalone, useInstallPrompt } from '../lib/pwa.ts'
 import { supabase } from '../lib/supabase.ts'
@@ -95,6 +96,10 @@ export default function Settings() {
           {health.status === 'done' ? (
             <p className="ko-prose px-4 py-3 text-sm text-muted">{health.text}</p>
           ) : null}
+          <Link to="/diagnose" className="flex items-center justify-between px-4 py-3">
+            <span className="text-sm">자가 진단</span>
+            <span className="text-sm font-medium text-accent">전체 검사</span>
+          </Link>
         </div>
       </section>
 

@@ -10,6 +10,7 @@ import Library from './routes/Library.tsx'
 import Feed from './routes/Feed.tsx'
 import Capture from './routes/Capture.tsx'
 import BookDetail from './routes/BookDetail.tsx'
+import Diagnostics from './routes/Diagnostics.tsx'
 import Settings from './routes/Settings.tsx'
 import NotFound from './routes/NotFound.tsx'
 
@@ -20,9 +21,19 @@ export default function App() {
   }
   return (
     <AuthProvider>
-      <Gate>
-        <AppShell />
-      </Gate>
+      <Routes>
+        {/* 자가 진단은 인증 게이트 밖에 둔다. 로그인이 깨졌을 때가 이 화면이
+            가장 필요한 순간인데, 게이트 안에 있으면 그때 닿을 수 없다. */}
+        <Route path="/diagnose" element={<Diagnostics />} />
+        <Route
+          path="*"
+          element={
+            <Gate>
+              <AppShell />
+            </Gate>
+          }
+        />
+      </Routes>
       {/* 옵션이 최초 1회만 캡처되므로 앱 전체에서 한 번만 마운트한다 */}
       <ReloadPrompt />
     </AuthProvider>
