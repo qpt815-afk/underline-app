@@ -1,6 +1,7 @@
 import { extractWithGemini } from './_lib/gemini.js'
 import { extractWithClaude } from './_lib/claude.js'
 import { ocrFailure } from './_lib/ocrTypes.js'
+import { verifyBearer } from './_lib/auth.js'
 import type { OcrResult } from './_lib/ocrTypes.js'
 
 /**
@@ -39,6 +40,8 @@ function statusFor(result: OcrResult): number {
   switch (result.code) {
     case 'bad-request':
       return 400
+    case 'unauthorized':
+      return 401
     case 'not-configured':
     case 'bad-key':
     case 'bad-model':
@@ -56,6 +59,10 @@ function statusFor(result: OcrResult): number {
 }
 
 export async function POST(request: Request): Promise<Response> {
+  // 본문을 읽기 전에 막는다. 로그인 없이 보낸 큰 이미지에 시간을 쓸 이유가 없다.
+  const auth = await verifyBearer(request)
+  if (!auth) return json(ocrFailure('unauthorized'), 401)
+
   let body: OcrRequestBody
   try {
     body = (await request.json()) as OcrRequestBody

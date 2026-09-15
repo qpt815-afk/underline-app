@@ -165,6 +165,7 @@ const storageCheck: Check = {
 
 /** 코드별로 폰에서 할 수 있는 조치 한 줄. */
 const OCR_FIX: Record<string, string> = {
+  unauthorized: '세션이 만료됐을 수 있습니다. 로그아웃 후 다시 로그인하세요.',
   'not-configured': 'Vercel > Settings > Environment Variables 에 GEMINI_API_KEY 를 넣고 재배포하세요.',
   'bad-key': 'GEMINI_API_KEY 값이 틀렸습니다. aistudio.google.com 에서 키를 다시 복사해 Vercel 에 넣고 재배포하세요.',
   'bad-model': 'GEMINI_MODEL 값의 모델이 없습니다. Vercel 에서 그 값을 지우거나(기본값 사용) 다른 모델 ID 로 바꾸고 재배포하세요.',
@@ -186,6 +187,10 @@ const ocrCheck: Check = {
   // 모델 호출은 정상적으로도 수십 초가 걸릴 수 있다.
   timeoutMs: 70_000,
   run: async () => {
+    // OCR 함수는 로그인 세션을 요구한다. 없으면 검사 자체가 의미 없다.
+    const { data: sessionData } = await supabase.auth.getSession()
+    if (!sessionData.session) return { status: 'skip', detail: '로그인이 필요합니다.' }
+
     const canvas = new OffscreenCanvas(1200, 600)
     const ctx = canvas.getContext('2d')
     if (!ctx) return { status: 'skip', detail: '캔버스를 만들 수 없습니다.' }
