@@ -4,6 +4,7 @@ import ErrorState from '../components/ErrorState.tsx'
 import Skeleton from '../components/Skeleton.tsx'
 import PageHeader from '../components/PageHeader.tsx'
 import StarRating from '../components/StarRating.tsx'
+import CoverImage from '../components/CoverImage.tsx'
 import { booksWithCache } from '../lib/cachedQueries.ts'
 import { BOOK_STATUS_LABEL } from '../lib/types.ts'
 import { useAsync } from '../lib/useAsync.ts'
@@ -36,8 +37,10 @@ export default function Library() {
               <li key={book.id}>
                 <Link
                   to={`/book/${book.id}`}
-                  className="block rounded-2xl border border-line bg-surface p-4"
+                  className="flex gap-4 rounded-2xl border border-line bg-surface p-4"
                 >
+                  <CoverImage path={book.cover_path} title={book.title} className="h-24 w-16 shrink-0 rounded-lg" />
+                  <div className="min-w-0 flex-1">
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0">
                       <p className="ko-prose font-serif text-base">{book.title}</p>
@@ -52,6 +55,7 @@ export default function Library() {
                   <div className="mt-3 flex items-center justify-between">
                     <span className="text-xs text-muted">문장 {book.highlight_count}개</span>
                     {book.rating !== null ? <StarRating value={book.rating} size="sm" /> : null}
+                  </div>
                   </div>
                 </Link>
               </li>

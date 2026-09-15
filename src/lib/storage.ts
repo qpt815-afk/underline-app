@@ -29,3 +29,19 @@ export async function signedPhotoUrl(path: string, expiresInSec = 60 * 60): Prom
   if (error) throw new Error(error.message)
   return data.signedUrl
 }
+
+/**
+ * 책 표지. 같은 책은 같은 경로에 덮어쓴다 — 표지를 바꿔도 낡은 파일이 쌓이지 않게.
+ * 사진 파이프라인을 그대로 쓰므로 1600px JPEG 이다.
+ */
+export async function uploadCover(blob: Blob, userId: string, bookId: string): Promise<string> {
+  const path = `${userId}/covers/${bookId}.jpg`
+  const { error } = await supabase.storage.from(BUCKET).upload(path, blob, {
+    contentType: 'image/jpeg',
+    upsert: true,
+    // 덮어쓴 뒤 옛 표지가 캐시에 남지 않도록 짧게.
+    cacheControl: '60',
+  })
+  if (error) throw new Error(error.message)
+  return path
+}
