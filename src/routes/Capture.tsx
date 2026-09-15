@@ -8,6 +8,7 @@ import type { OcrProvider } from '../lib/ocrClient.ts'
 import { uploadPagePhoto } from '../lib/storage.ts'
 import { listBooks, createBook, createHighlights } from '../lib/books.ts'
 import type { BookWithCount, ExtractedParagraph } from '../lib/types.ts'
+import { groupSelected, splitSentences } from '../lib/sentences.ts'
 import { useAuth } from '../auth/AuthProvider.tsx'
 import { queueCapture, requestPersistence } from '../lib/db.ts'
 
@@ -15,7 +16,21 @@ type Stage =
   | { name: 'idle' }
   | { name: 'working'; label: string }
   | { name: 'error'; message: string; canRetryOther: boolean; detail?: string }
-  | { name: 'choose'; paragraphs: ExtractedParagraph[]; imagePath: string | null }
+  | { name: 'choose'; rows: SentenceRow[]; imagePath: string | null }
+
+/** 화면에서 탭으로 고르는 단위. OCR 문단을 문장으로 펼친 것. */
+interface SentenceRow {
+  text: string
+  /** 어느 문단에서 왔는지. 같은 문단의 연속 선택은 하나의 밑줄로 합친다. */
+  paragraph: number
+  uncertain: boolean
+}
+
+function toRows(paragraphs: ExtractedParagraph[]): SentenceRow[] {
+  return paragraphs.flatMap((p, paragraph) =>
+    splitSentences(p.text).map((text) => ({ text, paragraph, uncertain: p.uncertain }))
+  )
+}
 
 export default function Capture() {
   const navigate = useNavigate()
@@ -56,11 +71,13 @@ export default function Capture() {
       })
       return
     }
-    setSelected(new Set(result.paragraphs.map((_, i) => i)))
+    const rows = toRows(result.paragraphs)
+    // 밑줄은 고르는 행위다. 전부 켜 두면 '빼기'가 되어 버리므로 아무것도 고르지 않은 채 시작한다.
+    setSelected(new Set())
     setEdited({})
     setStage((prev) => ({
       name: 'choose',
-      paragraphs: result.paragraphs,
+      rows,
       imagePath: prev.name === 'choose' ? prev.imagePath : null,
     }))
   }
@@ -119,15 +136,15 @@ export default function Capture() {
         targetBookId = book.id
       }
       const pageNumber = page.trim() === '' ? null : Number(page)
-      const chosen = [...selected]
-        .sort((a, b) => a - b)
-        .map((index) => ({
-          book_id: targetBookId,
-          text: edited[index] ?? stage.paragraphs[index]?.text ?? '',
-          page: pageNumber !== null && Number.isFinite(pageNumber) ? pageNumber : null,
-          image_path: stage.imagePath,
-        }))
-        .filter((h) => h.text.trim() !== '')
+      const validPage = pageNumber !== null && Number.isFinite(pageNumber) ? pageNumber : null
+
+      // 같은 문단에서 연달아 고른 문장은 하나의 밑줄로 합친다.
+      const chosen = groupSelected(stage.rows, selected, edited).map((text) => ({
+        book_id: targetBookId,
+        text,
+        page: validPage,
+        image_path: stage.imagePath,
+      }))
 
       await createHighlights(chosen)
       void navigate('/feed')
@@ -193,17 +210,20 @@ export default function Capture() {
           className="pb-3"
           style={{ paddingTop: 'calc(env(safe-area-inset-top) + 1.25rem)' }}
         >
-          <h1 className="text-xl font-semibold">저장할 문장 고르기</h1>
-          <p className="mt-1 text-sm text-muted">탭해서 고르고, 글자를 눌러 고칠 수 있어요.</p>
+          <h1 className="text-xl font-semibold">밑줄 그을 문장 고르기</h1>
+          <p className="ko-prose mt-1 text-sm text-muted">
+            문장을 탭해서 고르세요. 이어진 문장을 함께 고르면 하나로 저장돼요.
+          </p>
         </header>
 
-        <ul className="space-y-3">
-          {stage.paragraphs.map((paragraph, index) => {
+        <ul className="space-y-2">
+          {stage.rows.map((row, index) => {
             const isOn = selected.has(index)
+            const startsParagraph = index === 0 || stage.rows[index - 1]?.paragraph !== row.paragraph
             return (
-              <li key={index}>
+              <li key={index} className={startsParagraph && index > 0 ? 'pt-3' : ''}>
                 <div
-                  className={`rounded-2xl border p-4 ${isOn ? 'border-accent bg-surface' : 'border-line bg-surface opacity-60'}`}
+                  className={`rounded-2xl border p-4 ${isOn ? 'border-accent bg-surface' : 'border-line bg-surface'}`}
                 >
                   <button
                     type="button"
@@ -218,16 +238,16 @@ export default function Capture() {
                     }}
                     className="block w-full text-left"
                   >
-                    <span className="ko-prose font-serif text-base">
-                      {edited[index] ?? paragraph.text}
+                    <span className={`ko-prose font-serif text-base ${isOn ? '' : 'text-muted'}`}>
+                      {edited[index] ?? row.text}
                     </span>
                   </button>
-                  {paragraph.uncertain ? (
-                    <p className="mt-2 text-xs text-accent">흐릿해서 잘못 읽었을 수 있어요</p>
+                  {row.uncertain && startsParagraph ? (
+                    <p className="mt-2 text-xs text-accent">이 문단은 흐릿해서 잘못 읽었을 수 있어요</p>
                   ) : null}
                   {isOn ? (
                     <textarea
-                      value={edited[index] ?? paragraph.text}
+                      value={edited[index] ?? row.text}
                       onChange={(e) => { setEdited((prev) => ({ ...prev, [index]: e.target.value })) }}
                       rows={3}
                       aria-label={`${String(index + 1)}번째 문장 고치기`}
@@ -286,7 +306,7 @@ export default function Capture() {
           onClick={() => { void save() }}
           className="mt-6 h-16 w-full rounded-2xl bg-accent text-base font-semibold text-white disabled:opacity-40"
         >
-          {saving ? '저장하는 중…' : `${String(selected.size)}개 문장 저장`}
+          {saving ? '저장하는 중…' : selected.size === 0 ? '문장을 골라주세요' : `${String(selected.size)}개 문장에 밑줄`}
         </button>
       </div>
     )
