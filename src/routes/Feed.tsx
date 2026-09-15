@@ -6,11 +6,21 @@ import SentenceCard from '../components/SentenceCard.tsx'
 import PageHeader from '../components/PageHeader.tsx'
 import { highlightsWithCache } from '../lib/cachedQueries.ts'
 import { deleteHighlight } from '../lib/books.ts'
+import HighlightActions from '../components/HighlightActions.tsx'
 import { useAsync } from '../lib/useAsync.ts'
 
 export default function Feed() {
   const [query, setQuery] = useState('')
+  const [bookId, setBookId] = useState<string>('')
   const { state, reload } = useAsync(() => highlightsWithCache(200), [])
+
+  // 필터 드롭다운용 책 목록. 문장에서 뽑으면 별도 요청이 없다.
+  const books = useMemo(() => {
+    if (state.status !== 'ready') return []
+    const seen = new Map<string, string>()
+    for (const h of state.data) seen.set(h.book.id, h.book.title)
+    return [...seen.entries()].map(([id, title]) => ({ id, title }))
+  }, [state])
 
   async function remove(id: string, text: string) {
     // 되돌릴 수 없으므로 한 번 묻는다. 문장 앞부분을 보여줘야 어느 것인지 안다.
@@ -26,26 +36,46 @@ export default function Feed() {
 
   const filtered = useMemo(() => {
     if (state.status !== 'ready') return []
-    const q = query.trim()
-    if (q === '') return state.data
-    return state.data.filter(
-      (h) => h.text.includes(q) || h.book.title.includes(q) || (h.book.author ?? '').includes(q)
-    )
-  }, [state, query])
+    const q = query.trim().replace(/^#/, '')
+    return state.data.filter((h) => {
+      if (bookId !== '' && h.book.id !== bookId) return false
+      if (q === '') return true
+      return (
+        h.text.includes(q) ||
+        h.book.title.includes(q) ||
+        (h.book.author ?? '').includes(q) ||
+        (h.note ?? '').includes(q) ||
+        h.tags.some((t) => t.includes(q))
+      )
+    })
+  }, [state, query, bookId])
 
   return (
     <div>
       <PageHeader title="문장" />
 
       {state.status === 'ready' && state.data.length > 0 ? (
-        <div className="px-5 pb-3">
+        <div className="space-y-2 px-5 pb-3">
           <input
             type="search"
             value={query}
             onChange={(e) => { setQuery(e.target.value) }}
-            placeholder="문장이나 책 제목 검색"
+            placeholder="문장, 책, 메모, #태그 검색"
             className="w-full rounded-xl border border-line bg-surface px-4 py-3"
           />
+          {books.length > 1 ? (
+            <select
+              value={bookId}
+              onChange={(e) => { setBookId(e.target.value) }}
+              aria-label="책으로 거르기"
+              className="w-full rounded-xl border border-line bg-surface px-4 py-3"
+            >
+              <option value="">모든 책</option>
+              {books.map((b) => (
+                <option key={b.id} value={b.id}>{b.title}</option>
+              ))}
+            </select>
+          ) : null}
         </div>
       ) : null}
 
@@ -71,7 +101,17 @@ export default function Feed() {
               bookTitle={highlight.book.title}
               author={highlight.book.author}
               page={highlight.page}
-              onDelete={() => { void remove(highlight.id, highlight.text) }}
+              note={highlight.note}
+              tags={highlight.tags}
+              footer={
+                <HighlightActions
+                  highlight={highlight}
+                  bookTitle={highlight.book.title}
+                  author={highlight.book.author}
+                  onChanged={reload}
+                  onDelete={() => { void remove(highlight.id, highlight.text) }}
+                />
+              }
             />
           </li>
         ))}

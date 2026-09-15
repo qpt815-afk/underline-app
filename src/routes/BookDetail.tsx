@@ -5,6 +5,7 @@ import ErrorState from '../components/ErrorState.tsx'
 import Skeleton from '../components/Skeleton.tsx'
 import SentenceCard from '../components/SentenceCard.tsx'
 import StarRating from '../components/StarRating.tsx'
+import HighlightActions from '../components/HighlightActions.tsx'
 import { deleteBook, deleteHighlight, getBook, listHighlightsForBook, updateBook } from '../lib/books.ts'
 import { BOOK_STATUS_LABEL } from '../lib/types.ts'
 import type { BookStatus } from '../lib/types.ts'
@@ -160,7 +161,17 @@ export default function BookDetail() {
                   <SentenceCard
                     text={highlight.text}
                     page={highlight.page}
-                    onDelete={() => { void removeHighlight(highlight.id, highlight.text) }}
+                    note={highlight.note}
+                    tags={highlight.tags}
+                    footer={
+                      <HighlightActions
+                        highlight={highlight}
+                        bookTitle={data.title}
+                        author={data.author}
+                        onChanged={highlights.reload}
+                        onDelete={() => { void removeHighlight(highlight.id, highlight.text) }}
+                      />
+                    }
                   />
                 </li>
               ))
