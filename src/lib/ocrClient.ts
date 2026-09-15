@@ -14,6 +14,8 @@ export interface OcrFail {
   code: string
   message: string
   retryAfterSec?: number
+  /** 공급자가 실제로 돌려준 오류 한 줄. 진단·에러 화면에 작게 보여준다. */
+  detail?: string
 }
 export type OcrResponse = OcrOk | OcrFail
 
