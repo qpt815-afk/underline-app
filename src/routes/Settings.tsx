@@ -7,6 +7,8 @@ import { clearCache, listPending } from '../lib/db.ts'
 import { useAuth } from '../auth/AuthProvider.tsx'
 import { buildJsonExport, buildMarkdownExport, downloadText, importJson } from '../lib/exportData.ts'
 import { localDateKey } from '../lib/daily.ts'
+import { disablePush, enablePush, getPushStatus, sendTestPush } from '../lib/push.ts'
+import type { PushStatus } from '../lib/push.ts'
 
 type HealthState = { status: 'idle' | 'loading' } | { status: 'done'; text: string }
 
@@ -18,6 +20,42 @@ export default function Settings() {
   const [dataMsg, setDataMsg] = useState<string | null>(null)
   const [dataBusy, setDataBusy] = useState(false)
   const importRef = useRef<HTMLInputElement>(null)
+  const [push, setPush] = useState<PushStatus | 'loading'>('loading')
+  const [pushBusy, setPushBusy] = useState(false)
+  const [pushMsg, setPushMsg] = useState<string | null>(null)
+
+  useEffect(() => {
+    let alive = true
+    void getPushStatus().then((status) => { if (alive) setPush(status) })
+    return () => { alive = false }
+  }, [])
+
+  async function togglePush() {
+    if (!user) return
+    setPushBusy(true)
+    setPushMsg(null)
+    try {
+      const next = push === 'on' ? await disablePush() : await enablePush(user.id)
+      setPush(next)
+      if (next === 'on') setPushMsg('켰어요. 내일 아침 8시에 첫 문장이 와요. 지금 바로 확인하려면 아래 테스트를 눌러 보세요.')
+      else if (next === 'denied') setPushMsg('알림이 차단돼 있어요. 폰 설정 > 애플리케이션 > 밑줄(또는 Chrome) > 알림에서 허용한 뒤 다시 켜 주세요.')
+    } catch (error) {
+      setPushMsg(error instanceof Error ? error.message : '알림 설정을 바꾸지 못했어요.')
+    } finally {
+      setPushBusy(false)
+    }
+  }
+
+  async function testPush() {
+    setPushBusy(true)
+    setPushMsg('보내는 중…')
+    try {
+      const result = await sendTestPush()
+      setPushMsg(result.message)
+    } finally {
+      setPushBusy(false)
+    }
+  }
 
   async function exportJson() {
     setDataBusy(true)
@@ -151,6 +189,35 @@ export default function Settings() {
       </section>
 
       <section className="px-5 pt-6">
+        <h2 className="text-sm font-medium text-muted">알림</h2>
+        <div className="mt-2 divide-y divide-line overflow-hidden rounded-xl border border-line bg-surface">
+          {push === 'loading' ? (
+            <Row label="매일 아침 8시 오늘의 문장" value="확인 중…" />
+          ) : push === 'unsupported' ? (
+            <Row label="매일 아침 8시 오늘의 문장" value={isStandalone() ? '이 브라우저는 알림을 지원하지 않아요' : '홈 화면에 추가한 앱에서 켤 수 있어요'} />
+          ) : push === 'no-key' ? (
+            <Row label="매일 아침 8시 오늘의 문장" value="서버에 알림 키가 없어요 (VITE_VAPID_PUBLIC_KEY)" />
+          ) : push === 'denied' ? (
+            <Row label="매일 아침 8시 오늘의 문장" value="차단됨 · 폰 설정에서 허용해 주세요" />
+          ) : (
+            <button
+              type="button"
+              disabled={pushBusy}
+              onClick={() => { void togglePush() }}
+              className="flex w-full items-center justify-between px-4 py-3 text-left disabled:opacity-40"
+            >
+              <span className="text-sm">매일 아침 8시 오늘의 문장</span>
+              <span className="text-sm font-medium text-accent">{push === 'on' ? '켜짐 · 끄기' : '켜기'}</span>
+            </button>
+          )}
+          {push === 'on' ? (
+            <SettingButton label="지금 테스트 알림 보내기" hint="아침에 올 것과 같은 알림" onClick={() => { void testPush() }} disabled={pushBusy} />
+          ) : null}
+          {pushMsg ? <p className="ko-prose px-4 py-3 text-sm text-muted">{pushMsg}</p> : null}
+        </div>
+      </section>
+
+      <section className="px-5 pt-6">
         <h2 className="text-sm font-medium text-muted">계정</h2>
         <div className="mt-2 divide-y divide-line overflow-hidden rounded-xl border border-line bg-surface">
           <Row label="로그인" value={user?.email ?? '—'} />
@@ -181,7 +248,7 @@ export default function Settings() {
 
       <section className="px-5 py-6">
         <p className="ko-prose text-xs text-muted">
-          알림 설정은 다음 단계에서 추가됩니다. 화면 밝기(다크 모드)는 폰의 시스템 설정을 따릅니다.
+          알림 시각은 아침 8시로 고정돼 있어요. 화면 밝기(다크 모드)는 폰의 시스템 설정을 따릅니다.
         </p>
       </section>
     </div>

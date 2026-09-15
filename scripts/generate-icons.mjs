@@ -36,8 +36,10 @@ function mark({ bg, ink, accent, safe }) {
   const uw = w * 0.78
   const underline = `<path d="M ${x0} ${uy} Q ${x0 + uw * 0.5} ${uy - w * 0.11} ${x0 + uw} ${uy - w * 0.015}" stroke="${accent}" stroke-width="${barH * 1.15}" stroke-linecap="round" fill="none"/>`
 
+  // bg 가 null 이면 배경 없이(투명) 그린다 — 푸시 알림 badge 용.
+  const background = bg ? `<rect width="${s}" height="${s}" fill="${bg}"/>` : ''
   return `<svg xmlns="http://www.w3.org/2000/svg" width="${s}" height="${s}" viewBox="0 0 ${s} ${s}">
-    <rect width="${s}" height="${s}" fill="${bg}"/>${bars}${underline}</svg>`
+    ${background}${bars}${underline}</svg>`
 }
 
 const PAPER = '#FAF8F4'
@@ -56,6 +58,14 @@ for (const t of targets) {
   await sharp(Buffer.from(t.svg)).resize(t.size, t.size).flatten({ background: PAPER }).png().toFile(resolve(OUT, t.file))
   console.log('wrote', t.file, t.size)
 }
+
+// 푸시 알림의 상태바 배지. 안드로이드는 알파 채널만 보고 단색으로 칠하므로
+// 흰색 마크 + 투명 배경이어야 한다. flatten 하면 안 된다.
+await sharp(Buffer.from(mark({ bg: null, ink: '#FFFFFF', accent: '#FFFFFF', safe: true })))
+  .resize(96, 96)
+  .png()
+  .toFile(resolve(OUT, 'badge-96.png'))
+console.log('wrote badge-96.png 96')
 
 writeFileSync(
   resolve(OUT, "favicon.svg"),

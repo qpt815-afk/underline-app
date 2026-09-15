@@ -67,4 +67,72 @@ self.addEventListener('fetch', (event: FetchEvent) => {
   )
 })
 
-// Phase 3 의 웹 푸시(push / notificationclick 핸들러)가 여기에 들어간다.
+/**
+ * 웹 푸시: 아침 8시 "오늘의 문장".
+ *
+ * 서버(api/_lib/push.ts)가 보내는 JSON 을 그대로 알림으로 그린다. 파싱에 실패해도
+ * 반드시 알림을 하나는 띄워야 한다 — userVisibleOnly 로 구독했기 때문에, 푸시를 받고
+ * 아무것도 안 보여주면 크롬이 "이 사이트가 백그라운드에서 갱신됨" 을 대신 띄우고
+ * 반복되면 구독을 끊는다.
+ */
+interface PushPayload {
+  title: string
+  body: string
+  url: string
+  tag: string
+}
+
+function parsePayload(data: PushMessageData | null): PushPayload {
+  const fallback: PushPayload = { title: '오늘의 문장', body: '앱을 열어 오늘의 문장을 확인하세요.', url: '/', tag: 'daily' }
+  if (!data) return fallback
+  try {
+    const raw: unknown = data.json()
+    if (typeof raw !== 'object' || raw === null) return fallback
+    const p = raw as Partial<Record<keyof PushPayload, unknown>>
+    return {
+      title: typeof p.title === 'string' && p.title ? p.title : fallback.title,
+      body: typeof p.body === 'string' ? p.body : fallback.body,
+      url: typeof p.url === 'string' && p.url.startsWith('/') ? p.url : fallback.url,
+      tag: typeof p.tag === 'string' && p.tag ? p.tag : fallback.tag,
+    }
+  } catch {
+    return fallback
+  }
+}
+
+self.addEventListener('push', (event: PushEvent) => {
+  const payload = parsePayload(event.data)
+  event.waitUntil(
+    self.registration.showNotification(payload.title, {
+      body: payload.body,
+      icon: '/icons/icon-192.png',
+      // 상태바의 작은 단색 아이콘. 없으면 크롬 종 모양이 뜬다.
+      badge: '/icons/badge-96.png',
+      // 같은 태그는 쌓이지 않고 교체된다.
+      tag: payload.tag,
+      lang: 'ko',
+      data: { url: payload.url },
+    })
+  )
+})
+
+self.addEventListener('notificationclick', (event: NotificationEvent) => {
+  event.notification.close()
+  const data = event.notification.data as { url?: unknown } | null
+  const path = data && typeof data.url === 'string' ? data.url : '/'
+  const url = new URL(path, self.location.origin).href
+
+  event.waitUntil(
+    (async () => {
+      // 이미 열려 있는 앱이 있으면 그 창을 앞으로. 없으면 새로 연다.
+      const windows = await self.clients.matchAll({ type: 'window', includeUncontrolled: true })
+      const existing = windows.find((client) => client.url.startsWith(self.location.origin))
+      if (existing) {
+        await existing.focus()
+        if (existing.url !== url) await existing.navigate(url).catch(() => undefined)
+        return
+      }
+      await self.clients.openWindow(url)
+    })()
+  )
+})
