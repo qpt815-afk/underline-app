@@ -163,6 +163,18 @@ const storageCheck: Check = {
   },
 }
 
+/** 코드별로 폰에서 할 수 있는 조치 한 줄. */
+const OCR_FIX: Record<string, string> = {
+  'not-configured': 'Vercel > Settings > Environment Variables 에 GEMINI_API_KEY 를 넣고 재배포하세요.',
+  'bad-key': 'GEMINI_API_KEY 값이 틀렸습니다. aistudio.google.com 에서 키를 다시 복사해 Vercel 에 넣고 재배포하세요.',
+  'bad-model': 'GEMINI_MODEL 값의 모델이 없습니다. Vercel 에서 그 값을 지우거나(기본값 사용) 다른 모델 ID 로 바꾸고 재배포하세요.',
+  overloaded: '구글 쪽이 붐비는 상태입니다. 몇 분 뒤 "다시 검사"를 눌러보세요. 대체 모델도 함께 시도했습니다.',
+  'quota-daily': '오늘 무료 한도를 다 썼습니다. 한도는 미국 태평양 자정(한국 오후 4~5시경)에 초기화됩니다.',
+  'quota-rate': '요청이 너무 잦습니다. 1분쯤 뒤에 다시 검사하세요.',
+  upstream: '위 상세 메시지가 원인입니다. Vercel > 프로젝트 > Logs 에서 [ocr] 로 시작하는 줄에도 같은 내용이 남습니다.',
+  timeout: '응답이 너무 늦었습니다. 네트워크를 확인하고 다시 검사하세요.',
+}
+
 /**
  * OCR 전체 경로. 이 앱에서 가장 깨지기 쉬운 곳이다 —
  * 모델 ID 는 타입 검사가 안 되고, 무료 한도와 키 설정도 여기서만 드러난다.
@@ -199,13 +211,8 @@ const ocrCheck: Check = {
     if (!result.ok) {
       return {
         status: 'fail',
-        detail: `${result.message} (${result.code})`,
-        fix:
-          result.code === 'not-configured'
-            ? 'Vercel 에 GEMINI_API_KEY 를 넣고 재배포하세요.'
-            : result.code === 'upstream'
-              ? '모델 ID 문제일 수 있습니다. Vercel 에 GEMINI_MODEL=gemini-3.1-flash-lite 를 추가하고 재배포해 보세요.'
-              : undefined,
+        detail: `${result.message} (${result.code})${result.detail ? ` — ${result.detail}` : ''}`,
+        fix: OCR_FIX[result.code],
       }
     }
 

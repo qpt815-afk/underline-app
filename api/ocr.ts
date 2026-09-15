@@ -40,7 +40,11 @@ function statusFor(result: OcrResult): number {
     case 'bad-request':
       return 400
     case 'not-configured':
+    case 'bad-key':
+    case 'bad-model':
       return 500
+    case 'overloaded':
+      return 503
     case 'quota-daily':
     case 'quota-rate':
       return 429
@@ -85,9 +89,12 @@ export async function POST(request: Request): Promise<Response> {
         ? await extractWithClaude(imageBase64, type, controller.signal)
         : await extractWithGemini(imageBase64, type, controller.signal)
     return json(result, statusFor(result))
-  } catch {
+  } catch (error) {
     // 공급자 모듈은 결과로 실패를 돌려주도록 되어 있지만, 예기치 못한 throw 도 막는다.
-    return json(ocrFailure('upstream'), 200)
+    const e = error as { name?: string; message?: string } | null
+    const detail = `${e?.name ?? 'Error'}: ${e?.message ?? String(error)}`.slice(0, 300)
+    console.error(`[ocr] ${chosen} threw: ${detail}`)
+    return json(ocrFailure('upstream', undefined, detail), 200)
   } finally {
     clearTimeout(timer)
   }

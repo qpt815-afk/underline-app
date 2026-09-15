@@ -14,7 +14,7 @@ import { queueCapture, requestPersistence } from '../lib/db.ts'
 type Stage =
   | { name: 'idle' }
   | { name: 'working'; label: string }
-  | { name: 'error'; message: string; canRetryOther: boolean }
+  | { name: 'error'; message: string; canRetryOther: boolean; detail?: string }
   | { name: 'choose'; paragraphs: ExtractedParagraph[]; imagePath: string | null }
 
 export default function Capture() {
@@ -50,6 +50,7 @@ export default function Capture() {
       setStage({
         name: 'error',
         message: result.message,
+        detail: result.detail,
         // 한도/차단/못 읽음은 다른 공급자로 다시 해볼 만하다.
         canRetryOther: result.code !== 'bad-request' && result.code !== 'offline',
       })
@@ -160,6 +161,9 @@ export default function Capture() {
         <p className="ko-prose rounded-xl bg-accent/10 p-4 text-sm text-accent" role="alert">
           {stage.message}
         </p>
+        {stage.detail ? (
+          <p className="mt-2 px-1 text-xs break-all text-muted">{stage.detail}</p>
+        ) : null}
         <div className="mt-6 space-y-3">
           {stage.canRetryOther && lastBase64 ? (
             <button
