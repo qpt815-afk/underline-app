@@ -1,7 +1,7 @@
 import Anthropic from '@anthropic-ai/sdk'
-import { EXTRACTION_PROMPT } from './prompt.ts'
-import { ocrFailure } from './ocrTypes.ts'
-import type { ExtractedParagraph, OcrResult } from './ocrTypes.ts'
+import { EXTRACTION_PROMPT } from './prompt.js'
+import { ocrFailure } from './ocrTypes.js'
+import type { ExtractedParagraph, OcrResult } from './ocrTypes.js'
 
 /** 무료 Gemini 가 안 될 때의 대안. 비용은 장당 약 $0.015~0.037. */
 const DEFAULT_MODEL = 'claude-sonnet-5'

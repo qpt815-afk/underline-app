@@ -1,7 +1,7 @@
-import { extractWithGemini } from './_lib/gemini.ts'
-import { extractWithClaude } from './_lib/claude.ts'
-import { ocrFailure } from './_lib/ocrTypes.ts'
-import type { OcrResult } from './_lib/ocrTypes.ts'
+import { extractWithGemini } from './_lib/gemini.js'
+import { extractWithClaude } from './_lib/claude.js'
+import { ocrFailure } from './_lib/ocrTypes.js'
+import type { OcrResult } from './_lib/ocrTypes.js'
 
 /**
  * Hobby 플랜의 상한이 60초다. 여유가 없으므로 클라이언트 쪽 abort 는 그보다 짧게 잡는다.

@@ -11,3 +11,4 @@ dist-ssr
 npm-debug.log*
 .eslintcache
 *.tsbuildinfo
+.vercel-out

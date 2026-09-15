@@ -1,8 +1,8 @@
 import { GoogleGenAI, Type, ThinkingLevel, ApiError, FinishReason } from '@google/genai'
 import type { Schema } from '@google/genai'
-import { EXTRACTION_PROMPT } from './prompt.ts'
-import { ocrFailure } from './ocrTypes.ts'
-import type { ExtractedParagraph, OcrResult } from './ocrTypes.ts'
+import { EXTRACTION_PROMPT } from './prompt.js'
+import { ocrFailure } from './ocrTypes.js'
+import type { ExtractedParagraph, OcrResult } from './ocrTypes.js'
 
 /**
  * 기본 모델. 환경변수로 바꿀 수 있게 해 둔 이유:
