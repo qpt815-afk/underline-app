@@ -114,6 +114,39 @@ Supabase 내장 메일은 **프로젝트 전체에서 시간당 2통**입니다.
 > `VITE_` 가 없는 변수(`ANTHROPIC_API_KEY` 등)는 서버에서만 읽히며 클라이언트에
 > 노출되지 않습니다.
 
+### 6단계 — 아침 8시 "오늘의 문장" 알림 켜기 (Phase 3에 필요)
+
+매일 08:00(KST)에 저장해 둔 문장 하나가 폰 알림으로 옵니다. 환경변수 5개가 더 필요합니다.
+
+1. **VAPID 키 만들기** — 폰에서 배포된 앱의 `/diagnose` 화면(설정 → 자가 진단)을 열고
+   맨 아래 **설정 도구 → 키 만들기**. 공개키·비밀키가 뜨면 각각 **복사**해 둡니다.
+   키는 폰 안에서 만들어지고 어디로도 전송되지 않습니다.
+   > 한 번 넣은 키는 바꾸지 마세요. 바꾸면 켜 둔 알림이 전부 풀려 다시 켜야 합니다.
+2. **Supabase secret key** — Supabase 대시보드 → 프로젝트 → 좌측 하단 **Project Settings**
+   → **API Keys** → 상단 **Secret keys** 탭 → **Create new secret key** → 이름은 아무거나
+   (예: `vercel-cron`) → 만들어진 `sb_secret_…` 값을 복사. 화면을 닫으면 다시 볼 수 없으니
+   바로 다음 단계에 붙여넣으세요.
+3. **CRON_SECRET** — 아무 긴 무작위 문자열(비밀번호 생성기로 32자 이상). Vercel이
+   Cron을 호출할 때 이 값을 헤더에 붙여 주므로, 외부에서 아무나 알림을 쏘지 못합니다.
+4. Vercel → 프로젝트 → **Settings** → **Environment Variables** 에 다섯 개 추가:
+
+   | Key | Value |
+   |---|---|
+   | `VITE_VAPID_PUBLIC_KEY` | 1번의 공개키 |
+   | `VAPID_PRIVATE_KEY` | 1번의 비밀키 |
+   | `VAPID_SUBJECT` | `mailto:` + 본인 이메일 (예: `mailto:me@gmail.com`) |
+   | `CRON_SECRET` | 3번 |
+   | `SUPABASE_SECRET_KEY` | 2번 |
+
+   > ⚠️ `SUPABASE_SECRET_KEY` 와 `VAPID_PRIVATE_KEY` 에는 절대 `VITE_` 를 붙이지 마세요.
+   > 붙이는 순간 번들에 박혀 누구나 모든 사용자의 데이터를 읽을 수 있습니다.
+5. **Deployments** → 최신 항목 **⋯** → **Redeploy** (공개키가 `VITE_` 라 재배포가 필요)
+6. Vercel → 프로젝트 → **Settings** → **Cron Jobs** 에 `/api/push` 가 `0 23 * * *` 로
+   보이는지 확인합니다. 첫 배포 뒤에 자동으로 등록됩니다.
+7. 폰에서 앱을 열고 **설정 → 알림 → 매일 아침 8시 오늘의 문장 → 켜기** → 권한 허용 →
+   **지금 테스트 알림 보내기**. 몇 초 안에 알림이 오면 끝입니다. 아침 알림도 같은 경로로
+   옵니다. (와이프 폰도 같은 방법으로 각자 켭니다.)
+
 ---
 
 ## 프로젝트 구조
@@ -121,18 +154,39 @@ Supabase 내장 메일은 **프로젝트 전체에서 시간당 2통**입니다.
 ```
 api/                  Vercel 서버리스 함수 (비밀 키는 여기서만 다룬다)
   health.ts           배포 상태 확인용. 설정 화면의 "서버 연결 확인" 버튼이 호출
+  ocr.ts              사진 → 문단 추출. 로그인 토큰 검증 후 Gemini(기본)/Claude 호출
+  push.ts             GET: Cron이 매일 부르는 알림 발송 · POST: 본인에게 테스트 알림
+  share-target.ts     서비스워커가 아직 없을 때 공유 POST를 받아 앱으로 돌려보내는 안전망
+  _lib/               함수들이 공유하는 코드. 상대 import는 반드시 .js 확장자
+    gemini.ts, claude.ts, prompt.ts, ocrTypes.ts   OCR 어댑터
+    auth.ts, supabaseServer.ts                     토큰 검증, 사용자/관리자 클라이언트
+    dailyPick.ts, push.ts                          오늘의 문장 선정, web-push 발송
 public/
   fonts/              본문 세리프 (Noto Serif KR, SIL OFL)
-  icons/              PWA 아이콘 (scripts/generate-icons.mjs 로 생성)
+  icons/              PWA 아이콘·알림 배지 (scripts/generate-icons.mjs 로 생성)
 scripts/
   generate-icons.mjs  아이콘 재생성 (폰트 의존성 없이 도형으로만 그린다)
 src/
-  sw.ts               서비스워커. Share Target(Phase 2)과 웹 푸시(Phase 3)가 여기 붙는다
+  sw.ts               서비스워커. 프리캐시, Share Target, 웹 푸시 수신·클릭
   index.css           팔레트·타이포그래피·한국어 줄바꿈
   App.tsx             라우팅과 앱 셸
-  components/         BottomNav, EmptyState, PageHeader, ReloadPrompt
-  routes/             Home, Library, Feed, Settings, NotFound
-  lib/pwa.ts          설치 프롬프트(beforeinstallprompt) 처리
+  auth/               이메일 OTP 로그인, 세션 게이트
+  components/         카드·버튼·상태 화면 등 UI 조각
+  routes/             Home, Library, Feed, Capture, BookDetail, Settings, Diagnostics
+  workers/            사진 리사이즈 워커
+  lib/
+    supabase.ts       클라이언트. database.types.ts 는 손으로 유지하는 스키마 타입
+    books.ts          책·문장 읽기/쓰기. 쓰기는 오프라인이면 대기열로
+    db.ts             Dexie: 읽기 캐시, 촬영 대기열, 쓰기 대기열(outbox)
+    offline.ts        "온라인이면 서버, 아니면 캐시+대기열" 규칙
+    sync.ts           연결이 돌아오면 outbox 를 서버로 흘려보낸다
+    dailyPick.ts      오늘의 문장 (daily_picks 이력, 30일 안 중복 없음)
+    push.ts           알림 구독 켜기/끄기, 테스트 발송
+    vapid.ts          VAPID 키 쌍을 폰에서 만든다 (터미널 없는 사람용)
+    photo/            리사이즈·JPEG 인코딩
+    cardImage.ts      문장 카드 PNG (인스타 스토리 비율)
+    exportData.ts     JSON/마크다운 내보내기, JSON 가져오기
+    diagnose.ts       자가 진단 검사 목록
 supabase/migrations/  대시보드 SQL Editor에 붙여넣을 스키마
 ```
 
@@ -152,7 +206,7 @@ supabase/migrations/  대시보드 SQL Editor에 붙여넣을 스키마
 이 프로젝트는 **클라우드에서만** 개발·검증합니다. 로컬 실행을 전제하지 않습니다.
 
 ```bash
-npm run typecheck   # tsc --noEmit (앱/서비스워커/함수 각각)
+npm run typecheck   # tsc -b (앱/서비스워커/함수 세 프로젝트를 전부 검사)
 npm run lint        # 타입 인식 ESLint
 npm run build       # typecheck + 프로덕션 빌드
 ```
@@ -173,7 +227,16 @@ npm run sync-font                                  # 폰트 파일 다시 복사
   장변 1600px / JPEG 0.85로 줄여 보냅니다(약 300~500KB).
 - **Vercel Hobby 플랜의 Cron은 하루 1회**만 허용됩니다. 그래서 알림 시각은 08:00 KST
   고정이고 켜기/끄기만 제공합니다. 사용자가 시각을 고르는 기능은 넣지 않았습니다.
-  (cron 표현식은 UTC라 `0 23 * * *` 입니다 — 전날 23시)
+  (cron 표현식은 UTC라 `0 23 * * *` 입니다 — 전날 23시.) Hobby 플랜은 예약 시각에서
+  최대 한 시간 안에 실행되므로 실제로는 08:00~09:00 사이에 옵니다.
+- **알림은 안드로이드 Chrome(설치 여부 무관)에서 동작**합니다. iOS는 홈 화면에 추가한
+  앱에서만(16.4 이상) 켤 수 있고, 사파리 탭에서는 "지원하지 않아요" 로 뜹니다.
+- **오프라인 쓰기는 "마지막 쓰기가 이긴다"** 입니다. 두 기기에서 같은 문장의 메모를
+  오프라인으로 각각 고치면 나중에 연결된 쪽이 남습니다. 새 문장 저장(OCR)은 온라인이
+  필요하므로, 오프라인에서 찍은 사진은 촬영 화면 아래 목록에 남았다가 연결되면 이어서
+  처리합니다.
+- **오프라인 책 상세는 피드 캐시(최근 200개 문장) 안에서만** 보입니다. 아주 오래된
+  문장이 많은 책은 오프라인에서 일부만 보일 수 있습니다.
 - **Supabase 무료 플랜은 약 7일간 접속이 없으면 프로젝트가 일시정지**됩니다. 매일 쓰면
   문제없지만 일주일 자리를 비우면 대시보드에서 직접 재개해야 합니다.
 - **Preview 배포는 프로덕션과 다른 출처(origin)** 입니다. 서비스워커 캐시, IndexedDB,
