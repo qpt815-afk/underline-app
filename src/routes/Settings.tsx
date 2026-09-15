@@ -3,7 +3,8 @@ import { Link } from 'react-router'
 import PageHeader from '../components/PageHeader.tsx'
 import { isStandalone, useInstallPrompt } from '../lib/pwa.ts'
 import { supabase } from '../lib/supabase.ts'
-import { clearCache, listPending } from '../lib/db.ts'
+import { clearCache, countOutbox, listPending } from '../lib/db.ts'
+import { SYNC_EVENT, flushOutbox } from '../lib/sync.ts'
 import { useAuth } from '../auth/AuthProvider.tsx'
 import { buildJsonExport, buildMarkdownExport, downloadText, importJson } from '../lib/exportData.ts'
 import { localDateKey } from '../lib/daily.ts'
@@ -99,11 +100,23 @@ export default function Settings() {
     }
   }
 
+  const [outboxCount, setOutboxCount] = useState(0)
+
   useEffect(() => {
-    void listPending().then(
-      (rows) => { setPendingCount(rows.length) },
-      () => { setPendingCount(null) }
-    )
+    let alive = true
+    const refresh = () => {
+      void listPending().then(
+        (rows) => { if (alive) setPendingCount(rows.length) },
+        () => { if (alive) setPendingCount(null) }
+      )
+      void countOutbox().then((n) => { if (alive) setOutboxCount(n) }, () => undefined)
+    }
+    refresh()
+    window.addEventListener(SYNC_EVENT, refresh)
+    return () => {
+      alive = false
+      window.removeEventListener(SYNC_EVENT, refresh)
+    }
   }, [])
 
   async function signOut() {
@@ -222,7 +235,20 @@ export default function Settings() {
         <div className="mt-2 divide-y divide-line overflow-hidden rounded-xl border border-line bg-surface">
           <Row label="로그인" value={user?.email ?? '—'} />
           {pendingCount !== null && pendingCount > 0 ? (
-            <Row label="저장 대기 중인 사진" value={`${String(pendingCount)}장`} />
+            <Link to="/capture" className="flex items-center justify-between px-4 py-3">
+              <span className="text-sm">저장 대기 중인 사진</span>
+              <span className="text-sm font-medium text-accent">{String(pendingCount)}장 · 이어서 처리</span>
+            </Link>
+          ) : null}
+          {outboxCount > 0 ? (
+            <button
+              type="button"
+              onClick={() => { void flushOutbox() }}
+              className="flex w-full items-center justify-between px-4 py-3 text-left"
+            >
+              <span className="text-sm">서버에 보낼 변경</span>
+              <span className="text-sm font-medium text-accent">{String(outboxCount)}건 · 지금 보내기</span>
+            </button>
           ) : null}
           <button
             type="button"

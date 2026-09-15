@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router'
 import CaptureButtons from '../components/CaptureButtons.tsx'
 import { preparePhoto } from '../lib/photo/preparePhoto.ts'
@@ -10,13 +10,15 @@ import { listBooks, createBook, createHighlights } from '../lib/books.ts'
 import type { BookWithCount, ExtractedParagraph } from '../lib/types.ts'
 import { groupSelected, splitSentences } from '../lib/sentences.ts'
 import { useAuth } from '../auth/AuthProvider.tsx'
-import { queueCapture, requestPersistence } from '../lib/db.ts'
+import { dropPending, listPending, markPendingFailed, queueCapture, requestPersistence } from '../lib/db.ts'
+import type { PendingCapture } from '../lib/db.ts'
+import PendingCaptures from '../components/PendingCaptures.tsx'
 
 type Stage =
   | { name: 'idle' }
   | { name: 'working'; label: string }
   | { name: 'error'; message: string; canRetryOther: boolean; detail?: string }
-  | { name: 'choose'; rows: SentenceRow[]; imagePath: string | null }
+  | { name: 'choose'; rows: SentenceRow[]; imagePath: string | null; pendingId: string | null }
 
 /** 화면에서 탭으로 고르는 단위. OCR 문단을 문장으로 펼친 것. */
 interface SentenceRow {
@@ -47,6 +49,17 @@ export default function Capture() {
   // 마지막으로 인코딩한 사진을 들고 있어야 "다시 인식" 이 다시 찍지 않아도 된다.
   const [lastBase64, setLastBase64] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
+  // 오프라인에서 찍어 둔 사진들. 연결되면 여기서 이어서 처리한다.
+  const [pending, setPending] = useState<PendingCapture[]>([])
+  const [notice, setNotice] = useState<string | null>(null)
+
+  useEffect(() => {
+    void listPending().then(setPending, () => undefined)
+  }, [])
+
+  async function refreshPending() {
+    setPending(await listPending().catch(() => []))
+  }
 
   // 갤러리 공유로 들어온 사진. 서비스워커가 Cache API 에 넣어 두고 여기로 보낸다.
   const shared = searchParams.get('shared')
@@ -86,7 +99,8 @@ export default function Capture() {
     )
   }, [])
 
-  async function runOcr(base64: string, provider?: OcrProvider) {
+  /** 성공하면 null, 실패하면 사용자에게 보여준 메시지를 돌려준다. */
+  async function runOcr(base64: string, provider?: OcrProvider): Promise<string | null> {
     setStage({ name: 'working', label: '문장을 읽는 중…' })
     const result = await requestOcr(base64, provider)
     if (!result.ok) {
@@ -97,7 +111,7 @@ export default function Capture() {
         // 한도/차단/못 읽음은 다른 공급자로 다시 해볼 만하다.
         canRetryOther: result.code !== 'bad-request' && result.code !== 'offline',
       })
-      return
+      return result.message
     }
     const rows = toRows(result.paragraphs)
     // 밑줄은 고르는 행위다. 전부 켜 두면 '빼기'가 되어 버리므로 아무것도 고르지 않은 채 시작한다.
@@ -107,8 +121,14 @@ export default function Capture() {
       name: 'choose',
       rows,
       imagePath: prev.name === 'choose' ? prev.imagePath : null,
+      pendingId: prev.name === 'choose' ? prev.pendingId : pendingRef.current,
     }))
+    return null
   }
+
+  // 지금 처리 중인 사진이 촬영 대기열에서 온 것이면 그 id. 저장이 끝나면 대기열에서 뺀다.
+  // state 가 아니라 ref 인 이유: runOcr 이 setStage 안에서 읽는데, 그 시점의 state 는 낡았을 수 있다.
+  const pendingRef = useRef<string | null>(null)
 
   async function handlePick(file: File) {
     setStage({ name: 'working', label: '사진을 준비하는 중…' })
@@ -121,33 +141,52 @@ export default function Capture() {
       setStage({ name: 'error', message, canRetryOther: false })
       return
     }
-    setLastBase64(prepared.base64)
+    await processPhoto(prepared.blob, prepared.base64, null)
+  }
 
-    // 원본 보관과 문장 추출을 동시에 보낸다. allSettled 를 쓰는 이유:
-    // 업로드가 실패해도 문장 추출은 계속돼야 하고, 반대도 마찬가지다.
-    const uploadPromise = user
-      ? uploadPagePhoto(prepared.blob, user.id).then(
-          (path) => path,
-          () => null
-        )
-      : Promise.resolve(null)
+  /** 대기열의 사진을 이어서 처리한다. 이미 인코딩돼 있으므로 준비 단계가 없다. */
+  async function resumePending(item: PendingCapture) {
+    if (!navigator.onLine) {
+      setNotice('아직 오프라인이에요. 연결되면 다시 눌러 주세요.')
+      return
+    }
+    await processPhoto(item.blob, item.base64, item.id)
+  }
+
+  async function processPhoto(blob: Blob, base64: string, pendingId: string | null) {
+    pendingRef.current = pendingId
+    setLastBase64(base64)
+    setNotice(null)
 
     // 오프라인이면 네트워크를 시도하는 대신 바로 대기열에 넣는다.
     // 지하철에서 찍은 사진이 사라지면 되돌릴 방법이 없다.
     if (!navigator.onLine) {
       void requestPersistence()
-      await queueCapture(prepared.blob, prepared.base64)
-      setStage({
-        name: 'error',
-        message: '지금은 오프라인이라 저장해 뒀어요. 연결되면 설정 화면에서 이어서 처리할 수 있어요.',
-        canRetryOther: false,
-      })
+      if (!pendingId) await queueCapture(blob, base64)
+      await refreshPending()
+      setStage({ name: 'idle' })
+      setNotice('지금은 오프라인이라 사진을 저장해 뒀어요. 연결되면 아래에서 이어서 처리할 수 있어요.')
       return
     }
 
-    const [uploaded] = await Promise.allSettled([uploadPromise, runOcr(prepared.base64)])
+    // 원본 보관과 문장 추출을 동시에 보낸다. allSettled 를 쓰는 이유:
+    // 업로드가 실패해도 문장 추출은 계속돼야 하고, 반대도 마찬가지다.
+    const uploadPromise = user
+      ? uploadPagePhoto(blob, user.id).then(
+          (path) => path,
+          () => null
+        )
+      : Promise.resolve(null)
+
+    const [uploaded, ocr] = await Promise.allSettled([uploadPromise, runOcr(base64)])
     const imagePath = uploaded.status === 'fulfilled' ? uploaded.value : null
     setStage((prev) => (prev.name === 'choose' ? { ...prev, imagePath } : prev))
+    // OCR 이 실패했다. 대기열 사진이면 실패 사유를 남겨 둔다 — 사진은 그대로 남는다.
+    const failure = ocr.status === 'fulfilled' ? ocr.value : '문장을 읽지 못했어요.'
+    if (failure && pendingId) {
+      await markPendingFailed(pendingId, failure).catch(() => undefined)
+      await refreshPending()
+    }
   }
 
   async function save() {
@@ -175,6 +214,8 @@ export default function Capture() {
       }))
 
       await createHighlights(chosen)
+      // 대기열에서 온 사진이면 이제 지운다. 저장 전에 지우면 실패 시 사진을 잃는다.
+      if (stage.pendingId) await dropPending(stage.pendingId).catch(() => undefined)
       void navigate('/feed')
     } catch (error) {
       setStage({
@@ -221,7 +262,7 @@ export default function Capture() {
           ) : null}
           <button
             type="button"
-            onClick={() => { setStage({ name: 'idle' }) }}
+            onClick={() => { pendingRef.current = null; setStage({ name: 'idle' }) }}
             className="h-14 w-full rounded-xl border border-line bg-surface font-semibold"
           >
             다시 찍기
@@ -349,6 +390,19 @@ export default function Capture() {
         </p>
       </header>
       <CaptureButtons onPick={(file) => { void handlePick(file) }} />
+      {notice ? (
+        <p className="ko-prose mt-4 rounded-xl bg-accent/10 p-3 text-sm text-accent" role="status">{notice}</p>
+      ) : null}
+      {pending.length > 0 ? (
+        <PendingCaptures
+          items={pending}
+          onResume={(item) => { void resumePending(item) }}
+          onDiscard={(item) => {
+            if (!window.confirm('이 사진을 대기열에서 지울까요? 문장은 저장되지 않아요.')) return
+            void dropPending(item.id).then(refreshPending)
+          }}
+        />
+      ) : null}
     </div>
   )
 }

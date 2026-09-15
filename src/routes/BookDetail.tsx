@@ -11,7 +11,8 @@ import { preparePhoto } from '../lib/photo/preparePhoto.ts'
 import { PhotoError } from '../lib/photo/encodePhoto.ts'
 import { uploadCover } from '../lib/storage.ts'
 import { useAuth } from '../auth/AuthProvider.tsx'
-import { deleteBook, deleteHighlight, getBook, listHighlightsForBook, updateBook } from '../lib/books.ts'
+import { deleteBook, deleteHighlight, updateBook } from '../lib/books.ts'
+import { bookHighlightsWithCache, bookWithCache } from '../lib/cachedQueries.ts'
 import { BOOK_STATUS_LABEL } from '../lib/types.ts'
 import type { BookStatus } from '../lib/types.ts'
 import { useAsync } from '../lib/useAsync.ts'
@@ -46,8 +47,8 @@ export default function BookDetail() {
     }
   }
 
-  const book = useAsync(() => getBook(id ?? ''), [id])
-  const highlights = useAsync(() => listHighlightsForBook(id ?? '', order), [id, order])
+  const book = useAsync(() => bookWithCache(id ?? ''), [id])
+  const highlights = useAsync(() => bookHighlightsWithCache(id ?? '', order), [id, order])
 
   // 독서 기록은 낙관적으로 반영한다. 폰에서 별점을 누르고 기다리는 건 답답하다.
   const [draft, setDraft] = useState<{ rating?: number | null; review?: string } | null>(null)

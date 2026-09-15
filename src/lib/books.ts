@@ -1,4 +1,8 @@
 import { supabase } from './supabase.ts'
+import { patchCachedBook, patchCachedHighlight, removeCachedBook, removeCachedHighlight } from './db.ts'
+import type { BookPatch, HighlightPatch } from './db.ts'
+import { writeOrQueue } from './offline.ts'
+import type { WriteResult } from './offline.ts'
 import type { Book, BookStatus, BookWithCount, Highlight, HighlightWithBook } from './types.ts'
 
 /**
@@ -54,16 +58,30 @@ export async function createBook(input: NewBook): Promise<Book> {
   )
 }
 
-export async function updateBook(
-  id: string,
-  patch: Partial<Pick<Book, 'title' | 'author' | 'status' | 'rating' | 'review' | 'started_at' | 'finished_at' | 'cover_path'>>
-): Promise<Book> {
-  return unwrap(await supabase.from('books').update(patch).eq('id', id).select().single())
+/**
+ * 수정·삭제는 오프라인이면 대기열에 들어간다('queued'). 캐시에는 바로 반영되므로
+ * 화면은 즉시 바뀌고, 연결되면 src/lib/sync.ts 가 서버에 보낸다.
+ */
+export function updateBook(id: string, patch: BookPatch): Promise<WriteResult> {
+  return writeOrQueue(
+    { kind: 'book.update', id, patch },
+    async () => {
+      const { error } = await supabase.from('books').update(patch).eq('id', id)
+      if (error) throw new Error(error.message)
+    },
+    () => patchCachedBook(id, patch)
+  )
 }
 
-export async function deleteBook(id: string): Promise<void> {
-  const { error } = await supabase.from('books').delete().eq('id', id)
-  if (error) throw new Error(error.message)
+export function deleteBook(id: string): Promise<WriteResult> {
+  return writeOrQueue(
+    { kind: 'book.delete', id },
+    async () => {
+      const { error } = await supabase.from('books').delete().eq('id', id)
+      if (error) throw new Error(error.message)
+    },
+    () => removeCachedBook(id)
+  )
 }
 
 /** 책 상세: 저장 순 또는 페이지 순. */
@@ -119,15 +137,25 @@ export async function createHighlights(items: NewHighlight[]): Promise<Highlight
   )
 }
 
-/** 태그·메모·본문 수정. */
-export async function updateHighlight(
-  id: string,
-  patch: Partial<Pick<Highlight, 'text' | 'note' | 'tags' | 'page'>>
-): Promise<Highlight> {
-  return unwrap(await supabase.from('highlights').update(patch).eq('id', id).select().single())
+/** 태그·메모·본문 수정. 오프라인이면 대기열('queued'). */
+export function updateHighlight(id: string, patch: HighlightPatch): Promise<WriteResult> {
+  return writeOrQueue(
+    { kind: 'highlight.update', id, patch },
+    async () => {
+      const { error } = await supabase.from('highlights').update(patch).eq('id', id)
+      if (error) throw new Error(error.message)
+    },
+    () => patchCachedHighlight(id, patch)
+  )
 }
 
-export async function deleteHighlight(id: string): Promise<void> {
-  const { error } = await supabase.from('highlights').delete().eq('id', id)
-  if (error) throw new Error(error.message)
+export function deleteHighlight(id: string): Promise<WriteResult> {
+  return writeOrQueue(
+    { kind: 'highlight.delete', id },
+    async () => {
+      const { error } = await supabase.from('highlights').delete().eq('id', id)
+      if (error) throw new Error(error.message)
+    },
+    () => removeCachedHighlight(id)
+  )
 }

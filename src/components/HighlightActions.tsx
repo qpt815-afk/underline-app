@@ -65,8 +65,9 @@ export default function HighlightActions({ highlight, bookTitle, author, onChang
         .split(/[,\s]+/)
         .map((t) => t.replace(/^#/, '').trim())
         .filter((t) => t !== '')
-      await updateHighlight(highlight.id, { note: note.trim() || null, tags: [...new Set(tagList)] })
+      const result = await updateHighlight(highlight.id, { note: note.trim() || null, tags: [...new Set(tagList)] })
       setEditing(false)
+      if (result === 'queued') flash('오프라인이라 저장해 뒀어요. 연결되면 올라가요.')
       onChanged()
     } catch (error) {
       flash(error instanceof Error ? error.message : '저장하지 못했어요')
