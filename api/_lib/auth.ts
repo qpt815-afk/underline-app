@@ -1,5 +1,11 @@
 import { createClient } from '@supabase/supabase-js'
 
+export interface VerifiedUser {
+  userId: string
+  /** 검증된 액세스 토큰. 이 사용자로서 RLS 를 통과하는 클라이언트를 만들 때 쓴다. */
+  token: string
+}
+
 /**
  * 요청의 Bearer 토큰이 유효한 Supabase 세션인지 확인한다.
  *
@@ -10,7 +16,7 @@ import { createClient } from '@supabase/supabase-js'
  * 서버 함수에서는 VITE_ 접두사 변수도 그대로 읽힌다(Vercel 은 모든 환경변수를
  * 함수에 노출한다). 별도 이름을 두면 두 군데 넣어야 하므로 같은 것을 쓴다.
  */
-export async function verifyBearer(request: Request): Promise<{ userId: string } | null> {
+export async function verifyBearer(request: Request): Promise<VerifiedUser | null> {
   const header = request.headers.get('authorization') ?? ''
   const token = /^Bearer\s+(.+)$/i.exec(header)?.[1]?.trim()
   if (!token) return null
@@ -24,5 +30,5 @@ export async function verifyBearer(request: Request): Promise<{ userId: string }
   })
   const { data, error } = await supabase.auth.getUser(token)
   if (error || !data.user) return null
-  return { userId: data.user.id }
+  return { userId: data.user.id, token }
 }

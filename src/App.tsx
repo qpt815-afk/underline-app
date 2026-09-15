@@ -13,6 +13,7 @@ import BookDetail from './routes/BookDetail.tsx'
 import Diagnostics from './routes/Diagnostics.tsx'
 import Settings from './routes/Settings.tsx'
 import NotFound from './routes/NotFound.tsx'
+import { useOutboxSync } from './lib/sync.ts'
 
 export default function App() {
   // 환경변수가 없으면 인증을 시도해봐야 의미가 없다. 무엇이 빠졌는지 먼저 보여준다.
@@ -41,6 +42,8 @@ export default function App() {
 }
 
 function AppShell() {
+  // 로그인한 뒤에만 돈다. 오프라인에서 한 수정을 연결이 돌아오면 서버에 보낸다.
+  useOutboxSync()
   return (
     // 100dvh 는 주소창이 접히는 문제를 해결한다. 키보드는 별개 문제라
     // index.html 의 interactive-widget=resizes-content 가 맡는다.

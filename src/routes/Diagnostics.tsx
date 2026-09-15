@@ -1,6 +1,9 @@
 import { useCallback, useState } from 'react'
 import PageHeader from '../components/PageHeader.tsx'
 import { CHECKS, runWithTimeout } from '../lib/diagnose.ts'
+import { generateVapidKeys } from '../lib/vapid.ts'
+import type { VapidKeyPair } from '../lib/vapid.ts'
+import { copyText } from '../lib/share.ts'
 import type { CheckResult, CheckStatus } from '../lib/diagnose.ts'
 
 type Row = { id: string; label: string } & (
@@ -26,6 +29,21 @@ export default function Diagnostics() {
     CHECKS.map((check) => ({ id: check.id, label: check.label, state: 'waiting' }))
   )
   const [running, setRunning] = useState(false)
+  const [vapid, setVapid] = useState<VapidKeyPair | null>(null)
+  const [copied, setCopied] = useState<string | null>(null)
+
+  async function makeVapid() {
+    try {
+      setVapid(await generateVapidKeys())
+    } catch (error) {
+      window.alert(error instanceof Error ? error.message : '키를 만들지 못했어요.')
+    }
+  }
+
+  async function copy(label: string, value: string) {
+    setCopied((await copyText(value)) ? label : null)
+    setTimeout(() => { setCopied(null) }, 1500)
+  }
 
   const runAll = useCallback(async () => {
     setRunning(true)
@@ -112,6 +130,56 @@ export default function Diagnostics() {
           돌지 않고, 누르실 때만 실행됩니다.
         </p>
       </div>
+
+      <section className="px-5 pt-8">
+        <h2 className="text-sm font-medium text-muted">설정 도구</h2>
+        <div className="mt-2 rounded-2xl border border-line bg-surface p-4">
+          <p className="text-sm font-medium">푸시 알림용 VAPID 키 만들기</p>
+          <p className="ko-prose mt-1 text-xs text-muted">
+            이 폰 안에서 만들어지고 어디로도 전송되지 않아요. 만든 뒤 Vercel 환경변수에
+            공개키는 VITE_VAPID_PUBLIC_KEY, 비밀키는 VAPID_PRIVATE_KEY 로 넣고 재배포하세요.
+            한 번 넣은 키는 바꾸지 마세요 — 바꾸면 켜 둔 알림이 전부 풀립니다.
+          </p>
+          {vapid ? (
+            <div className="mt-3 space-y-3">
+              <KeyField label="공개키 (VITE_VAPID_PUBLIC_KEY)" value={vapid.publicKey} copied={copied} onCopy={copy} />
+              <KeyField label="비밀키 (VAPID_PRIVATE_KEY)" value={vapid.privateKey} copied={copied} onCopy={copy} />
+            </div>
+          ) : (
+            <button
+              type="button"
+              onClick={() => { void makeVapid() }}
+              className="mt-3 h-12 w-full rounded-xl border border-line bg-bg text-sm font-semibold"
+            >
+              키 만들기
+            </button>
+          )}
+        </div>
+      </section>
+    </div>
+  )
+}
+
+function KeyField({
+  label,
+  value,
+  copied,
+  onCopy,
+}: {
+  label: string
+  value: string
+  copied: string | null
+  onCopy: (label: string, value: string) => Promise<void>
+}) {
+  return (
+    <div>
+      <div className="flex items-center justify-between">
+        <span className="text-xs text-muted">{label}</span>
+        <button type="button" onClick={() => { void onCopy(label, value) }} className="px-2 py-2 text-xs font-medium text-accent">
+          {copied === label ? '복사됨' : '복사'}
+        </button>
+      </div>
+      <code className="block rounded-lg bg-bg p-2 text-xs break-all select-all">{value}</code>
     </div>
   )
 }
