@@ -61,19 +61,32 @@
    <p style="font-size:32px;letter-spacing:8px"><b>{{ .Token }}</b></p>
    ```
 3. **Magic Link** (또는 Magic Link / OTP) 템플릿도 **똑같이** 바꿉니다
+4. **Authentication → Sign In / Providers → Email** 에서 **Email OTP length 를 6** 으로
+   바꿉니다. 기본값이 **8** 이라 앱 문구("6자리 코드")와 어긋납니다.
 
 > **왜 두 개인가**: 처음 로그인할 때는 계정이 없어서 *Confirm signup* 템플릿이,
 > 두 번째부터는 *Magic Link* 템플릿이 나갑니다. 하나만 고치면 첫 로그인 메일에
 > 코드가 없고, 무료 발송은 **시간당 2통**이라 그걸 확인하는 데만 한도를 태웁니다.
 
-### 3.6단계 — 커스텀 SMTP 설정 (강력 권장)
+### 3.6단계 — 발신 메일을 내 Gmail SMTP 로 (권장)
 
 Supabase 내장 메일은 **프로젝트 전체에서 시간당 2통**입니다. 로그인을 몇 번만
-시도해도 잠깁니다. [Resend](https://resend.com) 무료 플랜이면 충분합니다.
+시도해도 잠깁니다. 혼자 쓰는 앱이라면 **본인 Gmail 로 본인에게 보내는** 구성이
+가장 확실합니다(하루 500통, 스팸·폐기 걱정 없음).
 
-1. Resend 가입 → **API Keys** → 키 생성
-2. Supabase → **Project Settings** → **Authentication** → **SMTP Settings**
-3. **Enable Custom SMTP** 켜고 Resend가 알려주는 호스트/포트/사용자/비밀번호 입력
+1. Google 계정 → 보안 → **2단계 인증** 켜기 → **앱 비밀번호** 생성 (16자리)
+2. Supabase → **Authentication → Emails → SMTP Settings** → **Enable Custom SMTP**
+   - Host `smtp.gmail.com` · Port `465`
+   - Sender email / Username: `qpt815@gmail.com` · Sender name: `밑줄`
+   - Password: 위에서 만든 앱 비밀번호
+3. 저장 후 앱에서 코드를 요청하면 1초 안에 받은편지함으로 옵니다
+
+> ⚠️ **Resend 의 `onboarding@resend.dev` 발신은 쓰지 마세요.** 실제로 겪은 일입니다:
+> Resend 로그에는 5통 모두 Gmail 에 *Delivered* 로 찍혔는데 받은편지함·스팸함·전체보관함
+> 어디에도 없었습니다. 공용 테스트 발신 주소라 Gmail 이 수락한 뒤 조용히 폐기합니다.
+> 메일함에 도착조차 하지 않으므로 "스팸 아님" 필터로는 해결되지 않습니다.
+> 나중에 다른 사람에게 공개할 때는 도메인을 사서 Resend 에 인증하고
+> `noreply@내도메인` 으로 보내면 됩니다.
 
 ### 4단계 — OCR API 키 발급 (Phase 1에 필요)
 
