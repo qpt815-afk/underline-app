@@ -1,20 +1,35 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Link } from 'react-router'
 import EmptyState from '../components/EmptyState.tsx'
 import ErrorState from '../components/ErrorState.tsx'
 import Skeleton from '../components/Skeleton.tsx'
 import SentenceCard from '../components/SentenceCard.tsx'
 import { highlightsWithCache } from '../lib/cachedQueries.ts'
-import { localDateKey, pickForDate } from '../lib/daily.ts'
+import { resolveDailyPick } from '../lib/dailyPick.ts'
 import { useAsync } from '../lib/useAsync.ts'
+import { useAuth } from '../auth/AuthProvider.tsx'
+import type { HighlightWithBook } from '../lib/types.ts'
 
 export default function Home() {
+  const { user } = useAuth()
   // "다른 문장 보기" 를 누른 횟수. 날짜 시드에 섞어서 같은 날에도 다른 결과를 낸다.
   const [nonce, setNonce] = useState(0)
   const { state, reload } = useAsync(() => highlightsWithCache(200), [])
+  // undefined = 아직 정하는 중. null = 문장이 하나도 없다.
+  const [pick, setPick] = useState<HighlightWithBook | null | undefined>(undefined)
 
-  const today = localDateKey()
-  const pick = state.status === 'ready' ? pickForDate(state.data, today, nonce) : null
+  const candidates = state.status === 'ready' ? state.data : null
+  const userId = user?.id ?? null
+  useEffect(() => {
+    if (!candidates || !userId) return
+    let alive = true
+    void resolveDailyPick(candidates, userId, nonce).then((result) => {
+      if (alive) setPick(result)
+    })
+    return () => { alive = false }
+  }, [candidates, userId, nonce])
+
+  const loading = state.status === 'loading' || (state.status === 'ready' && pick === undefined)
 
   return (
     <div>
@@ -35,9 +50,9 @@ export default function Home() {
       </header>
 
       <section className="px-5">
-        {state.status === 'loading' ? <Skeleton rows={1} /> : null}
+        {loading ? <Skeleton rows={1} /> : null}
         {state.status === 'error' ? <ErrorState message={state.message} onRetry={reload} /> : null}
-        {state.status === 'ready' && pick ? (
+        {pick ? (
           <SentenceCard
             text={pick.text}
             bookTitle={pick.book.title}
@@ -45,7 +60,7 @@ export default function Home() {
             page={pick.page}
           />
         ) : null}
-        {state.status === 'ready' && !pick ? (
+        {state.status === 'ready' && pick === null ? (
           <div className="rounded-2xl border border-line bg-surface">
             <EmptyState
               title="아직 문장이 없어요"
