@@ -1,11 +1,11 @@
 import { useState } from 'react'
-import { useParams } from 'react-router'
+import { useNavigate, useParams } from 'react-router'
 import EmptyState from '../components/EmptyState.tsx'
 import ErrorState from '../components/ErrorState.tsx'
 import Skeleton from '../components/Skeleton.tsx'
 import SentenceCard from '../components/SentenceCard.tsx'
 import StarRating from '../components/StarRating.tsx'
-import { getBook, listHighlightsForBook, updateBook } from '../lib/books.ts'
+import { deleteBook, deleteHighlight, getBook, listHighlightsForBook, updateBook } from '../lib/books.ts'
 import { BOOK_STATUS_LABEL } from '../lib/types.ts'
 import type { BookStatus } from '../lib/types.ts'
 import { useAsync } from '../lib/useAsync.ts'
@@ -14,7 +14,9 @@ const STATUSES: BookStatus[] = ['reading', 'finished', 'wishlist']
 
 export default function BookDetail() {
   const { id } = useParams<{ id: string }>()
+  const navigate = useNavigate()
   const [order, setOrder] = useState<'created' | 'page'>('created')
+  const [deleting, setDeleting] = useState(false)
 
   const book = useAsync(() => getBook(id ?? ''), [id])
   const highlights = useAsync(() => listHighlightsForBook(id ?? '', order), [id, order])
@@ -31,6 +33,36 @@ export default function BookDetail() {
       // 실패하면 서버 값으로 되돌린다.
       setDraft(null)
       book.reload()
+    }
+  }
+
+  async function removeHighlight(highlightId: string, text: string) {
+    const head = text.length > 30 ? `${text.slice(0, 30)}…` : text
+    if (!window.confirm(`이 문장을 지울까요?\n\n“${head}”`)) return
+    try {
+      await deleteHighlight(highlightId)
+      highlights.reload()
+    } catch (error) {
+      window.alert(error instanceof Error ? error.message : '지우지 못했습니다.')
+    }
+  }
+
+  async function removeBook() {
+    if (!id || book.state.status !== 'ready') return
+    const count = highlights.state.status === 'ready' ? highlights.state.data.length : 0
+    // 책을 지우면 문장도 함께 사라진다(DB 의 on delete cascade). 그 사실을 분명히 말한다.
+    const warning =
+      count > 0
+        ? `『${book.state.data.title}』과 저장된 문장 ${String(count)}개가 모두 지워집니다. 되돌릴 수 없어요.`
+        : `『${book.state.data.title}』을 지울까요?`
+    if (!window.confirm(warning)) return
+    setDeleting(true)
+    try {
+      await deleteBook(id)
+      void navigate('/library', { replace: true })
+    } catch (error) {
+      setDeleting(false)
+      window.alert(error instanceof Error ? error.message : '지우지 못했습니다.')
     }
   }
 
@@ -125,11 +157,27 @@ export default function BookDetail() {
           {highlights.state.status === 'ready'
             ? highlights.state.data.map((highlight) => (
                 <li key={highlight.id}>
-                  <SentenceCard text={highlight.text} page={highlight.page} />
+                  <SentenceCard
+                    text={highlight.text}
+                    page={highlight.page}
+                    onDelete={() => { void removeHighlight(highlight.id, highlight.text) }}
+                  />
                 </li>
               ))
             : null}
         </ul>
+      </section>
+
+      {/* 파괴적인 동작은 맨 아래, 다른 것과 떨어뜨려 둔다. */}
+      <section className="mt-12 px-5">
+        <button
+          type="button"
+          disabled={deleting}
+          onClick={() => { void removeBook() }}
+          className="w-full rounded-xl border border-line py-3 text-sm text-muted disabled:opacity-40"
+        >
+          {deleting ? '지우는 중…' : '이 책 삭제'}
+        </button>
       </section>
     </div>
   )
