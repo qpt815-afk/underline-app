@@ -1,4 +1,5 @@
 import type { ExtractedParagraph } from './types.ts'
+import { supabase } from './supabase.ts'
 
 export type OcrProvider = 'gemini' | 'claude'
 
@@ -26,12 +27,19 @@ export async function requestOcr(
   imageBase64: string,
   provider?: OcrProvider
 ): Promise<OcrResponse> {
+  // 서버가 세션을 검증하므로 토큰을 실어 보낸다. 없으면 서버가 401 을 준다.
+  const { data: sessionData } = await supabase.auth.getSession()
+  const token = sessionData.session?.access_token
+
   const controller = new AbortController()
   const timer = setTimeout(() => { controller.abort() }, CLIENT_TIMEOUT_MS)
   try {
     const response = await fetch('/api/ocr', {
       method: 'POST',
-      headers: { 'content-type': 'application/json' },
+      headers: {
+        'content-type': 'application/json',
+        ...(token ? { authorization: `Bearer ${token}` } : {}),
+      },
       body: JSON.stringify({ imageBase64, mimeType: 'image/jpeg', provider }),
       signal: controller.signal,
     })

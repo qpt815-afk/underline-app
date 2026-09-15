@@ -1,10 +1,16 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router'
 import EmptyState from '../components/EmptyState.tsx'
 import ErrorState from '../components/ErrorState.tsx'
 import Skeleton from '../components/Skeleton.tsx'
 import SentenceCard from '../components/SentenceCard.tsx'
 import StarRating from '../components/StarRating.tsx'
+import HighlightActions from '../components/HighlightActions.tsx'
+import CoverImage, { forgetCover } from '../components/CoverImage.tsx'
+import { preparePhoto } from '../lib/photo/preparePhoto.ts'
+import { PhotoError } from '../lib/photo/encodePhoto.ts'
+import { uploadCover } from '../lib/storage.ts'
+import { useAuth } from '../auth/AuthProvider.tsx'
 import { deleteBook, deleteHighlight, getBook, listHighlightsForBook, updateBook } from '../lib/books.ts'
 import { BOOK_STATUS_LABEL } from '../lib/types.ts'
 import type { BookStatus } from '../lib/types.ts'
@@ -15,8 +21,30 @@ const STATUSES: BookStatus[] = ['reading', 'finished', 'wishlist']
 export default function BookDetail() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
+  const { user } = useAuth()
   const [order, setOrder] = useState<'created' | 'page'>('created')
   const [deleting, setDeleting] = useState(false)
+  const [coverBusy, setCoverBusy] = useState(false)
+  const coverInputRef = useRef<HTMLInputElement>(null)
+
+  async function changeCover(event: React.ChangeEvent<HTMLInputElement>) {
+    const input = event.currentTarget
+    const file = input.files?.item(0) ?? null
+    input.value = ''
+    if (!file || !id || !user) return
+    setCoverBusy(true)
+    try {
+      const prepared = await preparePhoto(file)
+      const path = await uploadCover(prepared.blob, user.id, id)
+      forgetCover(path)
+      await updateBook(id, { cover_path: path })
+      book.reload()
+    } catch (error) {
+      window.alert(error instanceof PhotoError ? error.message : error instanceof Error ? error.message : '표지를 올리지 못했습니다.')
+    } finally {
+      setCoverBusy(false)
+    }
+  }
 
   const book = useAsync(() => getBook(id ?? ''), [id])
   const highlights = useAsync(() => listHighlightsForBook(id ?? '', order), [id, order])
@@ -77,9 +105,26 @@ export default function BookDetail() {
 
   return (
     <div className="pb-8">
-      <header className="px-5 pb-4" style={{ paddingTop: 'calc(env(safe-area-inset-top) + 1.25rem)' }}>
-        <h1 className="ko-prose font-serif text-2xl">{data.title}</h1>
-        {data.author ? <p className="ko-prose mt-1 text-sm text-muted">{data.author}</p> : null}
+      <header className="flex gap-4 px-5 pb-4" style={{ paddingTop: 'calc(env(safe-area-inset-top) + 1.25rem)' }}>
+        <button
+          type="button"
+          disabled={coverBusy}
+          onClick={() => { coverInputRef.current?.click() }}
+          aria-label={data.cover_path ? '표지 바꾸기' : '표지 찍기'}
+          className="shrink-0 disabled:opacity-40"
+        >
+          <CoverImage path={data.cover_path} title={data.title} className="h-32 w-22 rounded-lg" />
+          <span className="mt-1 block text-center text-xs text-muted">
+            {coverBusy ? '올리는 중…' : data.cover_path ? '표지 바꾸기' : '표지 찍기'}
+          </span>
+        </button>
+        {/* 표지는 갤러리에서 고르거나 바로 찍는다. 갤러리 쪽이 더 흔하므로 capture 를 두지 않는다 —
+            안드로이드 사진 선택기에도 카메라가 있다. */}
+        <input ref={coverInputRef} type="file" accept="image/*" className="hidden" onChange={(e) => { void changeCover(e) }} />
+        <div className="min-w-0 flex-1">
+          <h1 className="ko-prose font-serif text-2xl">{data.title}</h1>
+          {data.author ? <p className="ko-prose mt-1 text-sm text-muted">{data.author}</p> : null}
+        </div>
       </header>
 
       <section className="space-y-4 px-5">
@@ -160,7 +205,17 @@ export default function BookDetail() {
                   <SentenceCard
                     text={highlight.text}
                     page={highlight.page}
-                    onDelete={() => { void removeHighlight(highlight.id, highlight.text) }}
+                    note={highlight.note}
+                    tags={highlight.tags}
+                    footer={
+                      <HighlightActions
+                        highlight={highlight}
+                        bookTitle={data.title}
+                        author={data.author}
+                        onChanged={highlights.reload}
+                        onDelete={() => { void removeHighlight(highlight.id, highlight.text) }}
+                      />
+                    }
                   />
                 </li>
               ))

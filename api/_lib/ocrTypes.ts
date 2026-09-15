@@ -17,6 +17,7 @@ export interface OcrSuccess {
 
 export type OcrErrorCode =
   | 'bad-request'
+  | 'unauthorized'
   | 'not-configured'
   | 'bad-key'
   | 'bad-model'
@@ -48,6 +49,7 @@ export type OcrResult = OcrSuccess | OcrFailure
 
 export const OCR_ERROR_MESSAGE: Record<OcrErrorCode, string> = {
   'bad-request': '사진을 보내지 못했습니다.',
+  unauthorized: '로그인이 필요합니다. 다시 로그인한 뒤 시도해 주세요.',
   'not-configured': 'OCR 키가 설정되지 않았습니다. 설정 화면의 안내를 확인하세요.',
   'bad-key': 'OCR 키가 잘못됐거나 권한이 없습니다. Vercel 의 GEMINI_API_KEY 값을 다시 확인하세요.',
   'bad-model': '설정된 OCR 모델을 찾을 수 없습니다. Vercel 의 GEMINI_MODEL 값을 확인하세요.',

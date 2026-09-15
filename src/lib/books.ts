@@ -119,6 +119,14 @@ export async function createHighlights(items: NewHighlight[]): Promise<Highlight
   )
 }
 
+/** 태그·메모·본문 수정. */
+export async function updateHighlight(
+  id: string,
+  patch: Partial<Pick<Highlight, 'text' | 'note' | 'tags' | 'page'>>
+): Promise<Highlight> {
+  return unwrap(await supabase.from('highlights').update(patch).eq('id', id).select().single())
+}
+
 export async function deleteHighlight(id: string): Promise<void> {
   const { error } = await supabase.from('highlights').delete().eq('id', id)
   if (error) throw new Error(error.message)

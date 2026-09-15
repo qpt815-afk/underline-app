@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { useNavigate } from 'react-router'
+import { useNavigate, useSearchParams } from 'react-router'
 import CaptureButtons from '../components/CaptureButtons.tsx'
 import { preparePhoto } from '../lib/photo/preparePhoto.ts'
 import { PhotoError } from '../lib/photo/encodePhoto.ts'
@@ -35,6 +35,7 @@ function toRows(paragraphs: ExtractedParagraph[]): SentenceRow[] {
 export default function Capture() {
   const navigate = useNavigate()
   const { user } = useAuth()
+  const [searchParams, setSearchParams] = useSearchParams()
   const [stage, setStage] = useState<Stage>({ name: 'idle' })
   const [books, setBooks] = useState<BookWithCount[]>([])
   const [bookId, setBookId] = useState<string | null>(null)
@@ -46,6 +47,33 @@ export default function Capture() {
   // 마지막으로 인코딩한 사진을 들고 있어야 "다시 인식" 이 다시 찍지 않아도 된다.
   const [lastBase64, setLastBase64] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
+
+  // 갤러리 공유로 들어온 사진. 서비스워커가 Cache API 에 넣어 두고 여기로 보낸다.
+  const shared = searchParams.get('shared')
+  useEffect(() => {
+    if (!shared) return
+    // 쿼리를 지워서 새로고침해도 다시 집어오지 않게 한다.
+    setSearchParams({}, { replace: true })
+    if (shared === 'missed') {
+      setStage({
+        name: 'error',
+        message: '공유된 사진을 받지 못했어요. 앱을 한 번 열어둔 뒤 다시 공유해 보세요.',
+        canRetryOther: false,
+      })
+      return
+    }
+    void (async () => {
+      const cache = await caches.open('share-inbox')
+      const res = await cache.match('/__shared-photo')
+      if (!res) return
+      await cache.delete('/__shared-photo')
+      const blob = await res.blob()
+      const name = decodeURIComponent(res.headers.get('x-name') ?? 'shared.jpg')
+      await handlePick(new File([blob], name, { type: blob.type }))
+    })()
+    // handlePick 은 렌더마다 새로 만들어지므로 shared 만 본다.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [shared])
 
   useEffect(() => {
     void listBooks().then(

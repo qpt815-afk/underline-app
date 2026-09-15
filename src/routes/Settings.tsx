@@ -1,10 +1,12 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router'
 import PageHeader from '../components/PageHeader.tsx'
 import { isStandalone, useInstallPrompt } from '../lib/pwa.ts'
 import { supabase } from '../lib/supabase.ts'
 import { clearCache, listPending } from '../lib/db.ts'
 import { useAuth } from '../auth/AuthProvider.tsx'
+import { buildJsonExport, buildMarkdownExport, downloadText, importJson } from '../lib/exportData.ts'
+import { localDateKey } from '../lib/daily.ts'
 
 type HealthState = { status: 'idle' | 'loading' } | { status: 'done'; text: string }
 
@@ -13,6 +15,51 @@ export default function Settings() {
   const { user } = useAuth()
   const [health, setHealth] = useState<HealthState>({ status: 'idle' })
   const [pendingCount, setPendingCount] = useState<number | null>(null)
+  const [dataMsg, setDataMsg] = useState<string | null>(null)
+  const [dataBusy, setDataBusy] = useState(false)
+  const importRef = useRef<HTMLInputElement>(null)
+
+  async function exportJson() {
+    setDataBusy(true)
+    try {
+      const data = await buildJsonExport()
+      downloadText(`밑줄-${localDateKey()}.json`, JSON.stringify(data, null, 2), 'application/json')
+      setDataMsg(`책 ${String(data.books.length)}권, 문장 ${String(data.highlights.length)}개를 내보냈어요.`)
+    } catch (error) {
+      setDataMsg(error instanceof Error ? error.message : '내보내지 못했어요.')
+    } finally {
+      setDataBusy(false)
+    }
+  }
+
+  async function exportMarkdown() {
+    setDataBusy(true)
+    try {
+      downloadText(`밑줄-${localDateKey()}.md`, await buildMarkdownExport(), 'text/markdown')
+      setDataMsg('마크다운으로 내보냈어요.')
+    } catch (error) {
+      setDataMsg(error instanceof Error ? error.message : '내보내지 못했어요.')
+    } finally {
+      setDataBusy(false)
+    }
+  }
+
+  async function handleImport(event: React.ChangeEvent<HTMLInputElement>) {
+    const input = event.currentTarget
+    const file = input.files?.item(0) ?? null
+    input.value = ''
+    if (!file) return
+    if (!window.confirm('이 파일의 책과 문장을 지금 계정에 추가할까요? 이미 있는 문장은 건너뜁니다.')) return
+    setDataBusy(true)
+    try {
+      const result = await importJson(await file.text())
+      setDataMsg(`책 ${String(result.books)}권, 문장 ${String(result.highlights)}개를 가져왔어요.`)
+    } catch (error) {
+      setDataMsg(error instanceof Error ? error.message : '가져오지 못했어요.')
+    } finally {
+      setDataBusy(false)
+    }
+  }
 
   useEffect(() => {
     void listPending().then(
@@ -121,10 +168,20 @@ export default function Settings() {
         </div>
       </section>
 
+      <section className="px-5 pt-6">
+        <h2 className="text-sm font-medium text-muted">내 데이터</h2>
+        <div className="mt-2 divide-y divide-line overflow-hidden rounded-xl border border-line bg-surface">
+          <SettingButton label="JSON 으로 내보내기" hint="전부 · 다시 가져올 수 있어요" onClick={() => { void exportJson() }} disabled={dataBusy} />
+          <SettingButton label="마크다운으로 내보내기" hint="책별 정리 · 옵시디언·노션용" onClick={() => { void exportMarkdown() }} disabled={dataBusy} />
+          <SettingButton label="JSON 가져오기" hint="내보낸 파일에서" onClick={() => { importRef.current?.click() }} disabled={dataBusy} />
+          <input ref={importRef} type="file" accept="application/json,.json" className="hidden" onChange={(e) => { void handleImport(e) }} />
+          {dataMsg ? <p className="ko-prose px-4 py-3 text-sm text-muted">{dataMsg}</p> : null}
+        </div>
+      </section>
+
       <section className="px-5 py-6">
         <p className="ko-prose text-xs text-muted">
-          데이터 내보내기와 알림 설정은 다음 단계에서 추가됩니다. 화면 밝기(다크 모드)는 폰의
-          시스템 설정을 따릅니다.
+          알림 설정은 다음 단계에서 추가됩니다. 화면 밝기(다크 모드)는 폰의 시스템 설정을 따릅니다.
         </p>
       </section>
     </div>
@@ -137,5 +194,19 @@ function Row({ label, value }: { label: string; value: string }) {
       <span className="text-sm">{label}</span>
       <span className="text-right text-sm text-muted">{value}</span>
     </div>
+  )
+}
+
+function SettingButton({ label, hint, onClick, disabled }: { label: string; hint: string; onClick: () => void; disabled?: boolean }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      className="flex w-full items-center justify-between gap-4 px-4 py-3 text-left disabled:opacity-40"
+    >
+      <span className="text-sm">{label}</span>
+      <span className="text-right text-xs text-muted">{hint}</span>
+    </button>
   )
 }
