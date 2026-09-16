@@ -3,7 +3,7 @@ import { useNavigate, useParams } from 'react-router'
 import EmptyState from '../components/EmptyState.tsx'
 import ErrorState from '../components/ErrorState.tsx'
 import Skeleton from '../components/Skeleton.tsx'
-import SentenceCard from '../components/SentenceCard.tsx'
+import HighlightRow from '../components/HighlightRow.tsx'
 import StarRating from '../components/StarRating.tsx'
 import HighlightActions from '../components/HighlightActions.tsx'
 import CoverImage, { forgetCover } from '../components/CoverImage.tsx'
@@ -24,6 +24,9 @@ export default function BookDetail() {
   const navigate = useNavigate()
   const { user } = useAuth()
   const [order, setOrder] = useState<'created' | 'page'>('created')
+  // 펼친 문장. 목록은 얇은 행으로 훑고, 누른 하나만 전문과 동작 버튼을 보여준다.
+  // 한 번에 하나만 펼쳐서 목록이 다시 두꺼워지지 않게 한다.
+  const [openId, setOpenId] = useState<string | null>(null)
   const [deleting, setDeleting] = useState(false)
   const [coverBusy, setCoverBusy] = useState(false)
   const coverInputRef = useRef<HTMLInputElement>(null)
@@ -70,6 +73,7 @@ export default function BookDetail() {
     if (!window.confirm(`이 문장을 지울까요?\n\n“${head}”`)) return
     try {
       await deleteHighlight(highlightId)
+      setOpenId((current) => (current === highlightId ? null : current))
       highlights.reload()
     } catch (error) {
       window.alert(error instanceof Error ? error.message : '지우지 못했습니다.')
@@ -178,7 +182,12 @@ export default function BookDetail() {
 
       <section className="mt-8">
         <div className="flex items-center justify-between px-5 pb-3">
-          <h2 className="text-sm font-medium text-muted">문장</h2>
+          <h2 className="text-sm font-medium text-muted">
+            문장
+            {highlights.state.status === 'ready' && highlights.state.data.length > 0
+              ? ` ${String(highlights.state.data.length)}개`
+              : null}
+          </h2>
           <button
             type="button"
             onClick={() => { setOrder((o) => (o === 'created' ? 'page' : 'created')) }}
@@ -199,16 +208,18 @@ export default function BookDetail() {
           />
         ) : null}
 
-        <ul className="space-y-3 px-5">
-          {highlights.state.status === 'ready'
-            ? highlights.state.data.map((highlight) => (
-                <li key={highlight.id}>
-                  <SentenceCard
-                    text={highlight.text}
-                    page={highlight.page}
-                    note={highlight.note}
-                    tags={highlight.tags}
-                    footer={
+        {highlights.state.status === 'ready' && highlights.state.data.length > 0 ? (
+          // 카드 대신 구분선으로 나눈 얇은 행. 한 책의 문장을 한 화면에서 훑을 수 있게.
+          <ul className="divide-y divide-line border-y border-line">
+            {highlights.state.data.map((highlight) => {
+              const open = openId === highlight.id
+              return (
+                <li key={highlight.id} className={`px-5 ${open ? 'bg-surface' : ''}`}>
+                  <HighlightRow
+                    highlight={highlight}
+                    open={open}
+                    onToggle={() => { setOpenId(open ? null : highlight.id) }}
+                    actions={
                       <HighlightActions
                         highlight={highlight}
                         bookTitle={data.title}
@@ -219,9 +230,10 @@ export default function BookDetail() {
                     }
                   />
                 </li>
-              ))
-            : null}
-        </ul>
+              )
+            })}
+          </ul>
+        ) : null}
       </section>
 
       {/* 파괴적인 동작은 맨 아래, 다른 것과 떨어뜨려 둔다. */}
