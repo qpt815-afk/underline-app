@@ -12,6 +12,17 @@ import { useAsync } from '../lib/useAsync.ts'
 export default function Feed() {
   const [query, setQuery] = useState('')
   const [bookId, setBookId] = useState<string>('')
+  // 펼친 카드. 목록에서는 본문 네 줄과 출처만 보이고, 누르면 전문과 동작 버튼이 나온다.
+  const [expanded, setExpanded] = useState<Set<string>>(new Set())
+
+  function toggle(id: string) {
+    setExpanded((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
   const { state, reload } = useAsync(() => highlightsWithCache(200), [])
 
   // 필터 드롭다운용 책 목록. 문장에서 뽑으면 별도 요청이 없다.
@@ -93,28 +104,37 @@ export default function Feed() {
         <EmptyState title="찾는 문장이 없어요" description={`"${query}" 와 맞는 문장이 없습니다.`} />
       ) : null}
 
-      <ul className="space-y-3 px-5 pb-8">
-        {filtered.map((highlight) => (
-          <li key={highlight.id}>
-            <SentenceCard
-              text={highlight.text}
-              bookTitle={highlight.book.title}
-              author={highlight.book.author}
-              page={highlight.page}
-              note={highlight.note}
-              tags={highlight.tags}
-              footer={
-                <HighlightActions
-                  highlight={highlight}
-                  bookTitle={highlight.book.title}
-                  author={highlight.book.author}
-                  onChanged={reload}
-                  onDelete={() => { void remove(highlight.id, highlight.text) }}
-                />
-              }
-            />
-          </li>
-        ))}
+      <ul className="space-y-2 px-5 pb-8">
+        {filtered.map((highlight) => {
+          const isOpen = expanded.has(highlight.id)
+          return (
+            <li key={highlight.id}>
+              <SentenceCard
+                compact
+                clamp={!isOpen}
+                expanded={isOpen}
+                onTap={() => { toggle(highlight.id) }}
+                text={highlight.text}
+                bookTitle={highlight.book.title}
+                author={highlight.book.author}
+                page={highlight.page}
+                note={highlight.note}
+                tags={highlight.tags}
+                footer={
+                  isOpen ? (
+                    <HighlightActions
+                      highlight={highlight}
+                      bookTitle={highlight.book.title}
+                      author={highlight.book.author}
+                      onChanged={reload}
+                      onDelete={() => { void remove(highlight.id, highlight.text) }}
+                    />
+                  ) : null
+                }
+              />
+            </li>
+          )
+        })}
       </ul>
     </div>
   )
