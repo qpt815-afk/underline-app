@@ -10,6 +10,7 @@ import Library from './routes/Library.tsx'
 import Feed from './routes/Feed.tsx'
 import Capture from './routes/Capture.tsx'
 import BookDetail from './routes/BookDetail.tsx'
+import NewBook from './routes/NewBook.tsx'
 import Diagnostics from './routes/Diagnostics.tsx'
 import Settings from './routes/Settings.tsx'
 import NotFound from './routes/NotFound.tsx'
@@ -58,6 +59,7 @@ function AppShell() {
           <Route path="/library" element={<Library />} />
           <Route path="/feed" element={<Feed />} />
           <Route path="/capture" element={<Capture />} />
+          <Route path="/book/new" element={<NewBook />} />
           <Route path="/book/:id" element={<BookDetail />} />
           <Route path="/settings" element={<Settings />} />
           <Route path="*" element={<NotFound />} />

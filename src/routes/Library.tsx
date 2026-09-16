@@ -14,7 +14,10 @@ export default function Library() {
 
   return (
     <div>
-      <PageHeader title="서재" />
+      <PageHeader
+        title="서재"
+        action={<Link to="/book/new" className="px-2 py-2 text-sm font-medium text-accent">책 추가</Link>}
+      />
 
       {state.status === 'loading' ? <Skeleton /> : null}
       {state.status === 'error' ? <ErrorState message={state.message} onRetry={reload} /> : null}
@@ -22,7 +25,7 @@ export default function Library() {
       {state.status === 'ready' && state.data.length === 0 ? (
         <EmptyState
           title="서재가 비어 있어요"
-          description="문장을 저장하면 책 단위로 차곡차곡 쌓입니다. 읽기 시작한 날, 다 읽은 날, 별점과 한 줄 감상도 함께 남길 수 있어요."
+          description="문장을 저장하면 책 단위로 차곡차곡 쌓입니다. 바코드를 비춰 책을 먼저 등록해 둘 수도 있어요. 읽기 시작한 날, 다 읽은 날, 별점과 한 줄 감상도 함께 남길 수 있어요."
           action={
             <Link to="/capture" className="rounded-lg bg-accent px-4 py-2 text-sm font-medium text-white">
               첫 문장 찍기

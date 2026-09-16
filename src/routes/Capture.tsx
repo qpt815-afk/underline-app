@@ -6,13 +6,15 @@ import { PhotoError } from '../lib/photo/encodePhoto.ts'
 import { requestOcr } from '../lib/ocrClient.ts'
 import type { OcrProvider } from '../lib/ocrClient.ts'
 import { uploadPagePhoto } from '../lib/storage.ts'
-import { listBooks, createBook, createHighlights } from '../lib/books.ts'
+import { listBooks, createBook, createHighlights, updateBook } from '../lib/books.ts'
 import type { BookWithCount, ExtractedParagraph } from '../lib/types.ts'
 import { groupSelected, splitSentences } from '../lib/sentences.ts'
 import { useAuth } from '../auth/AuthProvider.tsx'
 import { dropPending, listPending, markPendingFailed, queueCapture, requestPersistence } from '../lib/db.ts'
 import type { PendingCapture } from '../lib/db.ts'
 import PendingCaptures from '../components/PendingCaptures.tsx'
+import BookLookup from '../components/BookLookup.tsx'
+import { uploadCover } from '../lib/storage.ts'
 
 type Stage =
   | { name: 'idle' }
@@ -43,6 +45,8 @@ export default function Capture() {
   const [bookId, setBookId] = useState<string | null>(null)
   const [newTitle, setNewTitle] = useState('')
   const [newAuthor, setNewAuthor] = useState('')
+  // 바코드로 찾은 표지. 새 책이 만들어진 뒤에 올린다.
+  const [newCover, setNewCover] = useState<Blob | null>(null)
   const [page, setPage] = useState('')
   const [selected, setSelected] = useState<Set<number>>(new Set())
   const [edited, setEdited] = useState<Record<number, string>>({})
@@ -201,6 +205,15 @@ export default function Capture() {
         }
         const book = await createBook({ title: newTitle, author: newAuthor || null })
         targetBookId = book.id
+        if (newCover && user) {
+          // 표지는 덤이다. 실패해도 문장 저장은 계속돼야 한다.
+          try {
+            const path = await uploadCover(newCover, user.id, book.id)
+            await updateBook(book.id, { cover_path: path })
+          } catch {
+            // 표지 없이 진행
+          }
+        }
       }
       const pageNumber = page.trim() === '' ? null : Number(page)
       const validPage = pageNumber !== null && Number.isFinite(pageNumber) ? pageNumber : null
@@ -356,6 +369,13 @@ export default function Capture() {
                 onChange={(e) => { setNewAuthor(e.target.value) }}
                 placeholder="저자 (선택)"
                 className="w-full rounded-xl border border-line bg-surface px-4 py-3"
+              />
+              <BookLookup
+                onPick={(book) => {
+                  setNewTitle(book.title)
+                  setNewAuthor(book.author ?? '')
+                  setNewCover(book.cover)
+                }}
               />
             </>
           ) : null}
