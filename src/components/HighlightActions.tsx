@@ -20,6 +20,8 @@ type Busy = null | 'image' | 'save'
  */
 export default function HighlightActions({ highlight, bookTitle, author, onChanged, onDelete }: Props) {
   const [editing, setEditing] = useState(false)
+  const [text, setText] = useState(highlight.text)
+  const [page, setPage] = useState(highlight.page === null ? '' : String(highlight.page))
   const [note, setNote] = useState(highlight.note ?? '')
   const [tags, setTags] = useState(highlight.tags.join(', '))
   const [busy, setBusy] = useState<Busy>(null)
@@ -58,14 +60,38 @@ export default function HighlightActions({ highlight, bookTitle, author, onChang
     }
   }
 
+  function startEditing() {
+    // 다른 화면에서 바뀐 값이 있을 수 있으니 열 때마다 현재 값으로 채운다.
+    setText(highlight.text)
+    setPage(highlight.page === null ? '' : String(highlight.page))
+    setNote(highlight.note ?? '')
+    setTags(highlight.tags.join(', '))
+    setEditing(true)
+  }
+
   async function save() {
+    const trimmedText = text.trim()
+    if (trimmedText === '') {
+      flash('문장은 비울 수 없어요')
+      return
+    }
+    const pageNumber = page.trim() === '' ? null : Number(page)
+    if (pageNumber !== null && (!Number.isInteger(pageNumber) || pageNumber <= 0)) {
+      flash('쪽 번호는 1 이상의 숫자여야 해요')
+      return
+    }
     setBusy('save')
     try {
       const tagList = tags
         .split(/[,\s]+/)
         .map((t) => t.replace(/^#/, '').trim())
         .filter((t) => t !== '')
-      const result = await updateHighlight(highlight.id, { note: note.trim() || null, tags: [...new Set(tagList)] })
+      const result = await updateHighlight(highlight.id, {
+        text: trimmedText,
+        page: pageNumber,
+        note: note.trim() || null,
+        tags: [...new Set(tagList)],
+      })
       setEditing(false)
       if (result === 'queued') flash('오프라인이라 저장해 뒀어요. 연결되면 올라가요.')
       onChanged()
@@ -80,6 +106,22 @@ export default function HighlightActions({ highlight, bookTitle, author, onChang
     <div className="mt-4 border-t border-line pt-3">
       {editing ? (
         <div className="space-y-2">
+          {/* OCR 오타나 잘못 잘린 문장을 나중에라도 고칠 수 있어야 한다. */}
+          <textarea
+            value={text}
+            onChange={(e) => { setText(e.target.value) }}
+            rows={4}
+            aria-label="문장 고치기"
+            className="ko-prose w-full rounded-xl border border-line bg-bg p-3 font-serif"
+          />
+          <input
+            value={page}
+            onChange={(e) => { setPage(e.target.value) }}
+            inputMode="numeric"
+            placeholder="쪽 번호 (선택)"
+            aria-label="쪽 번호"
+            className="w-full rounded-xl border border-line bg-bg px-3 py-2 text-sm"
+          />
           <textarea
             value={note}
             onChange={(e) => { setNote(e.target.value) }}
@@ -109,7 +151,7 @@ export default function HighlightActions({ highlight, bookTitle, author, onChang
         </div>
       ) : (
         <div className="flex items-center gap-1 text-xs text-muted">
-          <Action label="메모" onClick={() => { setEditing(true) }} />
+          <Action label="수정" onClick={startEditing} />
           <Action label="복사" onClick={() => { void copy() }} />
           <Action label="공유" onClick={() => { void share() }} />
           <Action label={busy === 'image' ? '만드는 중…' : '이미지'} onClick={() => { void image() }} disabled={busy === 'image'} />
