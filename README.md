@@ -104,15 +104,25 @@ Supabase 내장 메일은 **프로젝트 전체에서 시간당 2통**입니다.
 
 ### 5단계 — Vercel에 환경변수 넣기
 
-1. Vercel 대시보드 → 프로젝트 → 상단 **Settings** → 좌측 **Environment Variables**
+1. Vercel 대시보드 → 프로젝트 → 왼쪽 사이드바 **Environment Variables**
+   (새 대시보드는 Settings 안이 아니라 사이드바에 바로 있습니다)
 2. `.env.example` 을 보면서 필요한 값을 하나씩 **Key / Value** 로 추가
-   (Environment는 Production·Preview·Development 전부 체크)
-3. 전부 넣었으면 상단 **Deployments** → 최신 항목 **⋯** → **Redeploy**
+   (Environment는 Production·Preview 체크)
+3. 전부 넣었으면 **Deployments** → 최신 항목 **⋯** → **Redeploy**
 
-> ⚠️ `VITE_` 로 시작하는 변수는 **빌드 시점에 클라이언트 번들에 박힙니다.**
-> 값을 바꾸면 반드시 재배포해야 반영되고, 누구나 볼 수 있으니 비밀 키를 넣으면 안 됩니다.
-> `VITE_` 가 없는 변수(`ANTHROPIC_API_KEY` 등)는 서버에서만 읽히며 클라이언트에
-> 노출되지 않습니다.
+변수를 만들 때 **타입**을 잘 고르세요. 여기서 두 번 막혔습니다.
+
+| 변수 | 타입 | 이유 |
+|---|---|---|
+| `VITE_` 로 시작하는 것 전부 | **Config** | 빌드 때 번들에 박히는 공개 값. Secret 으로 만들면 저장이 거부됩니다("Remove the public framework prefix…"). 이미 Secret 으로 만들었다면 타입을 바꿀 수 없으니 **삭제 후 다시 만드세요** |
+| 나머지(키·비밀) | **Secret** | 서버 함수에서만 읽히고 대시보드에서도 값이 가려집니다 |
+
+> ⚠️ **Secret 타입은 빈 값과 채운 값이 겉으로 구분되지 않습니다.** 이름만 먼저 만들어
+> 두면 빈 채로 저장될 수 있습니다. 의심되면 **⋯ → Edit** 로 값을 다시 넣으세요.
+> 앱의 **설정 → 자가 진단**이 어느 변수가 비었는지 이름으로 알려줍니다.
+>
+> ⚠️ 변수를 넣거나 바꾼 뒤에는 **반드시 Redeploy**. `VITE_` 변수는 빌드에 박히고,
+> 나머지도 배포 시점 스냅샷이라 재배포 전에는 반영되지 않습니다.
 
 ### 6단계 — 아침 8시 "오늘의 문장" 알림 켜기 (Phase 3에 필요)
 
@@ -123,29 +133,36 @@ Supabase 내장 메일은 **프로젝트 전체에서 시간당 2통**입니다.
    키는 폰 안에서 만들어지고 어디로도 전송되지 않습니다.
    > 한 번 넣은 키는 바꾸지 마세요. 바꾸면 켜 둔 알림이 전부 풀려 다시 켜야 합니다.
 2. **Supabase secret key** — Supabase 대시보드 → 프로젝트 → 좌측 하단 **Project Settings**
-   → **API Keys** → 상단 **Secret keys** 탭 → **Create new secret key** → 이름은 아무거나
-   (예: `vercel-cron`) → 만들어진 `sb_secret_…` 값을 복사. 화면을 닫으면 다시 볼 수 없으니
-   바로 다음 단계에 붙여넣으세요.
+   → **API Keys** → 상단 **Secret keys** 탭. 이미 있는 `default` 키를 써도 됩니다 — 표의
+   오른쪽 **API KEY** 열(가로로 스크롤)에서 보기/복사. 새로 만들 필요는 없고, 만들더라도
+   하나면 됩니다. 이 키 하나가 서버 전권이므로 여러 개 만들어 두지 마세요.
 3. **CRON_SECRET** — 아무 긴 무작위 문자열(비밀번호 생성기로 32자 이상). Vercel이
    Cron을 호출할 때 이 값을 헤더에 붙여 주므로, 외부에서 아무나 알림을 쏘지 못합니다.
-4. Vercel → 프로젝트 → **Settings** → **Environment Variables** 에 다섯 개 추가:
+4. Vercel → 프로젝트 → 사이드바 **Environment Variables** 에 다섯 개 추가:
 
-   | Key | Value |
-   |---|---|
-   | `VITE_VAPID_PUBLIC_KEY` | 1번의 공개키 |
-   | `VAPID_PRIVATE_KEY` | 1번의 비밀키 |
-   | `VAPID_SUBJECT` | `mailto:` + 본인 이메일 (예: `mailto:me@gmail.com`) |
-   | `CRON_SECRET` | 3번 |
-   | `SUPABASE_SECRET_KEY` | 2번 |
+   | Key | Value | 타입 |
+   |---|---|---|
+   | `VITE_VAPID_PUBLIC_KEY` | 1번의 공개키 | **Config** |
+   | `VAPID_PRIVATE_KEY` | 1번의 비밀키 | Secret |
+   | `VAPID_SUBJECT` | `mailto:` + 본인 이메일 (예: `mailto:me@gmail.com`) | Secret |
+   | `CRON_SECRET` | 3번 | Secret |
+   | `SUPABASE_SECRET_KEY` | 2번 | Secret |
+
+   공개키·비밀키는 **같은 쌍**이어야 합니다. 키 만들기 화면은 새로고침하면 사라지니
+   둘 다 붙여넣기 전에는 탭을 닫지 마세요.
 
    > ⚠️ `SUPABASE_SECRET_KEY` 와 `VAPID_PRIVATE_KEY` 에는 절대 `VITE_` 를 붙이지 마세요.
    > 붙이는 순간 번들에 박혀 누구나 모든 사용자의 데이터를 읽을 수 있습니다.
 5. **Deployments** → 최신 항목 **⋯** → **Redeploy** (공개키가 `VITE_` 라 재배포가 필요)
 6. Vercel → 프로젝트 → **Settings** → **Cron Jobs** 에 `/api/push` 가 `0 23 * * *` 로
    보이는지 확인합니다. 첫 배포 뒤에 자동으로 등록됩니다.
-7. 폰에서 앱을 열고 **설정 → 알림 → 매일 아침 8시 오늘의 문장 → 켜기** → 권한 허용 →
+7. 폰에서 앱을 열고 **설정 → 자가 진단 → 검사 시작**. 맨 아래 **아침 알림** 줄이
+   "서버 설정 완료"면 변수 5개가 다 들어간 것입니다. 비어 있는 변수가 있으면 이름을
+   알려줍니다.
+8. **설정 → 알림 → 매일 아침 8시 오늘의 문장 → 켜기** → 권한 허용 →
    **지금 테스트 알림 보내기**. 몇 초 안에 알림이 오면 끝입니다. 아침 알림도 같은 경로로
-   옵니다. (와이프 폰도 같은 방법으로 각자 켭니다.)
+   옵니다. (와이프 폰도 같은 방법으로 각자 켭니다. 테스트 알림에는 `SUPABASE_SECRET_KEY`
+   가 쓰이지 않습니다 — 그 키는 아침 Cron 에만 필요합니다.)
 
 ---
 
@@ -153,7 +170,7 @@ Supabase 내장 메일은 **프로젝트 전체에서 시간당 2통**입니다.
 
 ```
 api/                  Vercel 서버리스 함수 (비밀 키는 여기서만 다룬다)
-  health.ts           배포 상태 확인용. 설정 화면의 "서버 연결 확인" 버튼이 호출
+  health.ts           배포 상태 + 알림 환경변수 유무(값은 아님). 설정·자가 진단 화면이 호출
   ocr.ts              사진 → 문단 추출. 로그인 토큰 검증 후 Gemini(기본)/Claude 호출
   push.ts             GET: Cron이 매일 부르는 알림 발송 · POST: 본인에게 테스트 알림
   share-target.ts     서비스워커가 아직 없을 때 공유 POST를 받아 앱으로 돌려보내는 안전망
