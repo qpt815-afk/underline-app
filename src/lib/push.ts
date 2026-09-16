@@ -18,7 +18,9 @@ export type PushStatus =
   | 'on'
   | 'off'
 
-const PUBLIC_KEY = (import.meta.env.VITE_VAPID_PUBLIC_KEY as string | undefined)?.trim() || null
+/** 번들에 박힌 VAPID 공개키. 없으면 구독을 만들 수 없다. */
+export const VAPID_PUBLIC_KEY = (import.meta.env.VITE_VAPID_PUBLIC_KEY as string | undefined)?.trim() || null
+const PUBLIC_KEY = VAPID_PUBLIC_KEY
 
 export function isPushSupported(): boolean {
   return (

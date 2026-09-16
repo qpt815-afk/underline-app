@@ -1,6 +1,7 @@
 import { supabase, SUPABASE_CONFIG_ERROR } from './supabase.ts'
 import { requestOcr } from './ocrClient.ts'
 import { isStandalone } from './pwa.ts'
+import { isPushSupported, VAPID_PUBLIC_KEY } from './push.ts'
 
 export type CheckStatus = 'pass' | 'fail' | 'warn' | 'skip'
 
@@ -253,6 +254,77 @@ const pwaCheck: Check = {
   },
 }
 
+const PUSH_ENV_NAMES = [
+  'VITE_VAPID_PUBLIC_KEY',
+  'VAPID_PRIVATE_KEY',
+  'VAPID_SUBJECT',
+  'CRON_SECRET',
+  'SUPABASE_SECRET_KEY',
+] as const
+
+/**
+ * 아침 알림에 필요한 것들이 갖춰졌는지. 실제로 보내지는 않는다.
+ * 서버 쪽 변수는 /api/health 가 "있는지" 만 알려준다 — Secret 타입 변수는 대시보드에서
+ * 빈 값과 채운 값이 구분되지 않아 이 검사가 아니면 curl 로 찔러봐야 한다.
+ */
+const pushCheck: Check = {
+  id: 'push',
+  label: '아침 알림',
+  run: async () => {
+    const missing: string[] = []
+    if (!VAPID_PUBLIC_KEY) missing.push('VITE_VAPID_PUBLIC_KEY(번들)')
+
+    try {
+      const response = await fetch('/api/health')
+      const body = (await response.json()) as { push?: Partial<Record<(typeof PUSH_ENV_NAMES)[number], boolean>> }
+      if (!body.push) {
+        return { status: 'warn', detail: '서버가 아직 알림 설정을 보고하지 않습니다.', fix: '최신 배포가 아닙니다. 새로고침하거나 재배포하세요.' }
+      }
+      for (const name of PUSH_ENV_NAMES) if (!body.push[name]) missing.push(name)
+    } catch {
+      return { status: 'fail', detail: '서버에 닿지 못했습니다.', fix: '네트워크 연결을 확인하세요.' }
+    }
+
+    if (missing.length > 0) {
+      return {
+        status: 'fail',
+        detail: `비어 있는 환경변수: ${[...new Set(missing)].join(', ')}`,
+        fix:
+          'Vercel > 프로젝트 > Environment Variables 에서 ⋯ > Edit 로 값을 다시 넣고 Redeploy 하세요. ' +
+          'Secret 타입은 빈 값도 채운 것처럼 보입니다. VITE_ 변수는 Config 타입이어야 하고(Secret 이면 저장이 거부됨), 번들에 박히므로 재배포가 필요합니다.',
+      }
+    }
+
+    if (!isPushSupported()) {
+      return {
+        status: 'warn',
+        detail: '서버 설정은 모두 있지만 이 브라우저는 알림을 지원하지 않습니다.',
+        fix: isStandalone() ? undefined : 'iOS 는 홈 화면에 추가한 앱에서만 알림을 켤 수 있습니다.',
+      }
+    }
+    const permission = Notification.permission
+    if (permission === 'denied') {
+      return {
+        status: 'warn',
+        detail: '서버 설정은 모두 있지만 알림 권한이 차단돼 있습니다.',
+        fix: '폰 설정 > 애플리케이션 > 밑줄(또는 Chrome) > 알림에서 허용한 뒤 설정 화면에서 켜세요.',
+      }
+    }
+    let subscribed = false
+    try {
+      const registration = await navigator.serviceWorker.getRegistration()
+      subscribed = registration !== undefined && (await registration.pushManager.getSubscription()) !== null
+    } catch {
+      // 구독 조회 실패는 아래 "꺼짐" 으로 취급한다.
+    }
+    return {
+      status: 'pass',
+      detail: subscribed ? '서버 설정 완료 · 이 기기에서 켜짐' : '서버 설정 완료 · 이 기기에서는 아직 꺼짐',
+      fix: subscribed ? undefined : '설정 > 알림 > 켜기를 누르고 "지금 테스트 알림 보내기" 로 확인하세요.',
+    }
+  },
+}
+
 export const CHECKS: Check[] = [
   envCheck,
   apiCheck,
@@ -261,4 +333,5 @@ export const CHECKS: Check[] = [
   storageCheck,
   ocrCheck,
   pwaCheck,
+  pushCheck,
 ]
