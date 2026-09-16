@@ -164,6 +164,20 @@ Supabase 내장 메일은 **프로젝트 전체에서 시간당 2통**입니다.
    옵니다. (와이프 폰도 같은 방법으로 각자 켭니다. 테스트 알림에는 `SUPABASE_SECRET_KEY`
    가 쓰이지 않습니다 — 그 키는 아침 Cron 에만 필요합니다.)
 
+### 7단계 — 바코드로 책 정보 채우기 (선택)
+
+서재 → **책 추가**, 또는 촬영 화면의 **새 책**에서 **바코드 스캔**을 누르면 뒤표지의
+ISBN 바코드를 읽어 제목·저자·표지를 채웁니다. 키 없이도 Google Books 로 동작하지만
+한국 책은 잘 못 찾으므로 **카카오 키**를 넣는 것을 권합니다.
+
+1. https://developers.kakao.com 로그인 → 상단 **내 애플리케이션** → **애플리케이션 추가하기**
+   → 앱 이름 `밑줄`, 회사명은 아무거나 → 저장
+2. 만든 앱 → 왼쪽 **앱 설정 → 앱 키** → **REST API 키** 복사
+3. Vercel → Environment Variables → `KAKAO_REST_API_KEY` (Secret 타입) → **Redeploy**
+
+바코드 읽기는 안드로이드 Chrome 의 내장 기능을 씁니다. iOS 사파리에는 없어서 그쪽은
+ISBN 을 직접 입력합니다(책 뒤표지 바코드 아래 숫자).
+
 ---
 
 ## 프로젝트 구조
@@ -173,11 +187,13 @@ api/                  Vercel 서버리스 함수 (비밀 키는 여기서만 다
   health.ts           배포 상태 + 알림 환경변수 유무(값은 아님). 설정·자가 진단 화면이 호출
   ocr.ts              사진 → 문단 추출. 로그인 토큰 검증 후 Gemini(기본)/Claude 호출
   push.ts             GET: Cron이 매일 부르는 알림 발송 · POST: 본인에게 테스트 알림
+  book.ts             ISBN → 제목·저자·출판사·표지 (카카오 → Google Books 순)
   share-target.ts     서비스워커가 아직 없을 때 공유 POST를 받아 앱으로 돌려보내는 안전망
   _lib/               함수들이 공유하는 코드. 상대 import는 반드시 .js 확장자
     gemini.ts, claude.ts, prompt.ts, ocrTypes.ts   OCR 어댑터
     auth.ts, supabaseServer.ts                     토큰 검증, 사용자/관리자 클라이언트
     dailyPick.ts, push.ts                          오늘의 문장 선정, web-push 발송
+    bookLookup.ts                                  ISBN 조회 어댑터
 public/
   fonts/              본문 세리프 (Noto Serif KR, SIL OFL)
   icons/              PWA 아이콘·알림 배지 (scripts/generate-icons.mjs 로 생성)
@@ -189,7 +205,7 @@ src/
   App.tsx             라우팅과 앱 셸
   auth/               이메일 OTP 로그인, 세션 게이트
   components/         카드·버튼·상태 화면 등 UI 조각
-  routes/             Home, Library, Feed, Capture, BookDetail, Settings, Diagnostics
+  routes/             Home, Library, Feed, Capture, BookDetail, NewBook, Settings, Diagnostics
   workers/            사진 리사이즈 워커
   lib/
     supabase.ts       클라이언트. database.types.ts 는 손으로 유지하는 스키마 타입
@@ -201,6 +217,7 @@ src/
     push.ts           알림 구독 켜기/끄기, 테스트 발송
     vapid.ts          VAPID 키 쌍을 폰에서 만든다 (터미널 없는 사람용)
     photo/            리사이즈·JPEG 인코딩
+    isbn.ts, barcode.ts  ISBN 검증·조회, 내장 BarcodeDetector 감지
     cardImage.ts      문장 카드 PNG (인스타 스토리 비율)
     exportData.ts     JSON/마크다운 내보내기, JSON 가져오기
     diagnose.ts       자가 진단 검사 목록
@@ -216,7 +233,7 @@ supabase/migrations/  대시보드 SQL Editor에 붙여넣을 스키마
 | `registerType: 'prompt'` | 문장을 고르는 중에 자동 리로드되면 작업이 날아갑니다 |
 | 본문 세리프 단일 파일 프리캐시 | 슬라이스 배포는 새 책의 낯선 음절마다 폰트를 새로 받으며 카드가 깜빡입니다. 약 950KB를 한 번 받고 끝냅니다 |
 | UI 서체는 `system-ui` | 갤럭시의 시스템 한글 서체(One UI Sans KR)가 이미 충분히 좋습니다. 웹폰트를 더 받을 이유가 없습니다 |
-| 표지는 직접 촬영 | 알라딘 OpenAPI는 2026-10-30 종료, 네이버 책 검색은 2026-07-31 종료됐습니다. 카메라 파이프라인이 이미 있으니 외부 의존성을 만들지 않습니다 |
+| 표지는 직접 촬영 + 바코드 조회 | 알라딘 OpenAPI는 2026-10-30 종료, 네이버 책 검색은 2026-07-31 종료됐습니다. 바코드 조회는 카카오 책 검색(한국 책)과 Google Books(예비)를 쓰고, 둘 다 못 찾으면 직접 찍습니다 |
 
 ## 개발
 
@@ -252,6 +269,7 @@ npm run sync-font                                  # 폰트 파일 다시 복사
   오프라인으로 각각 고치면 나중에 연결된 쪽이 남습니다. 새 문장 저장(OCR)은 온라인이
   필요하므로, 오프라인에서 찍은 사진은 촬영 화면 아래 목록에 남았다가 연결되면 이어서
   처리합니다.
+- **바코드 조회는 온라인에서만** 되고, 표지는 검색 서비스가 주는 작은 이미지(가로 약 120px)입니다. 더 선명한 표지를 원하면 책 상세에서 직접 찍어 덮어쓰면 됩니다.
 - **오프라인 책 상세는 피드 캐시(최근 200개 문장) 안에서만** 보입니다. 아주 오래된
   문장이 많은 책은 오프라인에서 일부만 보일 수 있습니다.
 - **Supabase 무료 플랜은 약 7일간 접속이 없으면 프로젝트가 일시정지**됩니다. 매일 쓰면
